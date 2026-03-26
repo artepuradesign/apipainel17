@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import SimpleTitleBar from '@/components/dashboard/SimpleTitleBar';
-import { ShoppingBag, Star, Eye, Pencil, Trash2, RefreshCw, Package } from 'lucide-react';
+import { ShoppingBag, Star, Eye, Pencil, Trash2, RefreshCw, Package, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cnpjProdutosService, type CnpjProduto } from '@/services/cnpjProdutosService';
@@ -31,6 +37,123 @@ const getInstallments = (price: number) => {
   return 2;
 };
 
+const isValidHttpUrl = (value: string) => {
+  if (!value) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const PIX_TYPES = ['cpf', 'cnpj', 'email', 'telefone', 'aleatoria'] as const;
+
+type StoreFormData = {
+  store_name: string;
+  description: string;
+  website: string;
+  logo_url: string;
+  whatsapp: string;
+  instagram: string;
+  pix_enabled: boolean;
+  pix_key_type: '' | (typeof PIX_TYPES)[number];
+  pix_key: string;
+  pix_instructions: string;
+};
+
+const initialStoreForm: StoreFormData = {
+  store_name: '',
+  description: '',
+  website: '',
+  logo_url: '',
+  whatsapp: '',
+  instagram: '',
+  pix_enabled: true,
+  pix_key_type: '',
+  pix_key: '',
+  pix_instructions: '',
+};
+
+const storeConfigSchema = z
+  .object({
+    store_name: z.string().trim().min(2, 'Informe o nome da loja').max(120, 'Máximo de 120 caracteres'),
+    description: z.string().trim().max(500, 'Máximo de 500 caracteres').optional().or(z.literal('')),
+    website: z
+      .string()
+      .trim()
+      .max(2048, 'Website inválido')
+      .optional()
+      .or(z.literal(''))
+      .refine((value) => isValidHttpUrl(value || ''), 'Informe uma URL válida iniciando com http:// ou https://'),
+    logo_url: z
+      .string()
+      .trim()
+      .max(2048, 'URL da logo inválida')
+      .optional()
+      .or(z.literal(''))
+      .refine((value) => isValidHttpUrl(value || ''), 'Informe uma URL válida iniciando com http:// ou https://'),
+    whatsapp: z
+      .string()
+      .trim()
+      .max(20, 'WhatsApp inválido')
+      .optional()
+      .or(z.literal(''))
+      .refine((value) => {
+        const digits = (value || '').replace(/\D+/g, '');
+        return !digits || (digits.length >= 10 && digits.length <= 13);
+      }, 'WhatsApp deve ter entre 10 e 13 dígitos (com DDD)'),
+    instagram: z
+      .string()
+      .trim()
+      .max(60, 'Instagram inválido')
+      .optional()
+      .or(z.literal(''))
+      .refine((value) => !value || /^@?[a-zA-Z0-9._]+$/.test(value), 'Usuário do Instagram inválido'),
+    pix_enabled: z.boolean(),
+    pix_key_type: z.enum(PIX_TYPES).optional().or(z.literal('')),
+    pix_key: z.string().trim().max(255, 'Chave PIX inválida').optional().or(z.literal('')),
+    pix_instructions: z.string().trim().max(240, 'Máximo de 240 caracteres').optional().or(z.literal('')),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.pix_enabled) return;
+
+    if (!data.pix_key_type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pix_key_type'],
+        message: 'Selecione o tipo de chave PIX',
+      });
+      return;
+    }
+
+    const key = (data.pix_key || '').trim();
+    if (!key) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pix_key'],
+        message: 'Informe a chave PIX',
+      });
+      return;
+    }
+
+    const digits = key.replace(/\D+/g, '');
+    const isValidByType =
+      (data.pix_key_type === 'cpf' && digits.length === 11) ||
+      (data.pix_key_type === 'cnpj' && digits.length === 14) ||
+      (data.pix_key_type === 'email' && z.string().email().safeParse(key).success) ||
+      (data.pix_key_type === 'telefone' && digits.length >= 10 && digits.length <= 13) ||
+      (data.pix_key_type === 'aleatoria' && /^[a-zA-Z0-9-]{20,80}$/.test(key));
+
+    if (!isValidByType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pix_key'],
+        message: 'Chave PIX inválida para o tipo selecionado',
+      });
+    }
+  });
+
 const CnpjLoja = () => {
   const MODULE_ID = 184;
   const navigate = useNavigate();
@@ -39,6 +162,8 @@ const CnpjLoja = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [produtos, setProdutos] = useState<CnpjProduto[]>([]);
+  const [storeForm, setStoreForm] = useState<StoreFormData>(initialStoreForm);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const currentModule = useMemo(
     () => modules.find((module) => Number(module.id) === MODULE_ID) || null,
@@ -67,9 +192,34 @@ const CnpjLoja = () => {
     setLoading(false);
   }, [user?.cnpj]);
 
+  const loadStoreConfig = useCallback(async () => {
+    const result = await cnpjProdutosService.obterConfiguracaoLoja();
+    if (!result.success || !result.data) {
+      return;
+    }
+
+    const config = result.data.configuracao || {};
+    setStoreForm({
+      store_name: config.store_name || result.data.empresa?.nome_empresa || user?.full_name || '',
+      description: config.description || '',
+      website: config.website || '',
+      logo_url: config.logo_url || '',
+      whatsapp: config.whatsapp || '',
+      instagram: config.instagram || '',
+      pix_enabled: Boolean(config.pix_enabled),
+      pix_key_type: (config.pix_key_type as StoreFormData['pix_key_type']) || '',
+      pix_key: config.pix_key || '',
+      pix_instructions: config.pix_instructions || '',
+    });
+  }, [user?.full_name]);
+
   useEffect(() => {
-    loadProdutos();
-  }, [loadProdutos]);
+    const loadPageData = async () => {
+      await Promise.all([loadProdutos(), loadStoreConfig()]);
+    };
+
+    void loadPageData();
+  }, [loadProdutos, loadStoreConfig]);
 
   const sections = useMemo(() => splitStoreSections(produtos), [produtos]);
 
@@ -81,6 +231,33 @@ const CnpjLoja = () => {
     }
 
     window.open(`/vendas/loja/${cnpjDigits}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSaveStoreConfig = async () => {
+    const parsed = storeConfigSchema.safeParse(storeForm);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message || 'Verifique os dados da loja');
+      return;
+    }
+
+    setSavingConfig(true);
+    try {
+      const payload = parsed.data;
+      const result = await cnpjProdutosService.salvarConfiguracaoLoja({
+        ...payload,
+        instagram: payload.instagram ? payload.instagram.replace('@', '') : '',
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Não foi possível salvar a configuração da loja');
+        return;
+      }
+
+      toast.success('Configuração da loja salva com sucesso');
+      await loadStoreConfig();
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   const handleDeleteFromCard = async (produto: CnpjProduto) => {
@@ -256,6 +433,144 @@ const CnpjLoja = () => {
             <Button className="w-full" onClick={handleOpenOnlineStore}>
               <ShoppingBag className="h-4 w-4" />
               Loja Online
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuração da loja pública</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="store-name">Nome da loja</Label>
+              <Input
+                id="store-name"
+                value={storeForm.store_name}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, store_name: e.target.value }))}
+                placeholder="Ex.: Minha Loja Virtual"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="store-website">Website (opcional)</Label>
+              <Input
+                id="store-website"
+                value={storeForm.website}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, website: e.target.value }))}
+                placeholder="https://sualoja.com.br"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label htmlFor="store-description">Descrição da loja</Label>
+              <Textarea
+                id="store-description"
+                value={storeForm.description}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Descreva sua loja, nicho e diferenciais"
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="store-logo">URL da logo (opcional)</Label>
+              <Input
+                id="store-logo"
+                value={storeForm.logo_url}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, logo_url: e.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="store-whatsapp">WhatsApp para contato</Label>
+              <Input
+                id="store-whatsapp"
+                value={storeForm.whatsapp}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label htmlFor="store-instagram">Instagram (opcional)</Label>
+              <Input
+                id="store-instagram"
+                value={storeForm.instagram}
+                onChange={(e) => setStoreForm((prev) => ({ ...prev, instagram: e.target.value }))}
+                placeholder="@minhaloja"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">Pagamento por PIX</h3>
+                <p className="text-xs text-muted-foreground">Ative para exibir sua chave PIX na página pública da loja.</p>
+              </div>
+              <Switch
+                checked={storeForm.pix_enabled}
+                onCheckedChange={(checked) => setStoreForm((prev) => ({ ...prev, pix_enabled: checked }))}
+              />
+            </div>
+
+            {storeForm.pix_enabled ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Tipo da chave PIX</Label>
+                  <Select
+                    value={storeForm.pix_key_type || 'none'}
+                    onValueChange={(value) => setStoreForm((prev) => ({ ...prev, pix_key_type: value === 'none' ? '' : (value as StoreFormData['pix_key_type']) }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      <SelectItem value="cpf">CPF</SelectItem>
+                      <SelectItem value="cnpj">CNPJ</SelectItem>
+                      <SelectItem value="email">E-mail</SelectItem>
+                      <SelectItem value="telefone">Telefone</SelectItem>
+                      <SelectItem value="aleatoria">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="pix-key">Chave PIX</Label>
+                  <Input
+                    id="pix-key"
+                    value={storeForm.pix_key}
+                    onChange={(e) => setStoreForm((prev) => ({ ...prev, pix_key: e.target.value }))}
+                    placeholder="Digite sua chave"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="pix-instructions">Instruções PIX (opcional)</Label>
+                  <Textarea
+                    id="pix-instructions"
+                    value={storeForm.pix_instructions}
+                    onChange={(e) => setStoreForm((prev) => ({ ...prev, pix_instructions: e.target.value }))}
+                    rows={2}
+                    placeholder="Ex.: Após o pagamento, envie o comprovante no WhatsApp"
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" onClick={loadStoreConfig} disabled={savingConfig}>
+              Recarregar
+            </Button>
+            <Button onClick={handleSaveStoreConfig} disabled={savingConfig}>
+              <Save className="h-4 w-4" />
+              {savingConfig ? 'Salvando...' : 'Salvar configuração'}
             </Button>
           </div>
         </CardContent>
