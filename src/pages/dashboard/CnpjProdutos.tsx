@@ -376,6 +376,7 @@ const CnpjProdutos = () => {
   const [taxonomyModal, setTaxonomyModal] = useState<{ open: boolean; key: TaxonomyKey | null }>({ open: false, key: null });
   const [taxonomyInput, setTaxonomyInput] = useState('');
   const [taxonomyEditingIndex, setTaxonomyEditingIndex] = useState<number | null>(null);
+  const [taxonomyParentCategory, setTaxonomyParentCategory] = useState('');
 
   const [deleteTarget, setDeleteTarget] = useState<CnpjProduto | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -455,16 +456,26 @@ const CnpjProdutos = () => {
     [activeTaxonomyKey, getTaxonomyOptions]
   );
 
+  const taxonomyParentOptions = useMemo(
+    () =>
+      normalizeSectionValues([...PRODUCT_CATEGORIES, ...sectionOptionsForForm.categories]).filter(
+        (item) => !item.includes('>')
+      ),
+    [sectionOptionsForForm.categories]
+  );
+
   const closeTaxonomyModal = () => {
     setTaxonomyModal({ open: false, key: null });
     setTaxonomyInput('');
     setTaxonomyEditingIndex(null);
+    setTaxonomyParentCategory('');
   };
 
   const openTaxonomyModal = (key: TaxonomyKey) => {
     setTaxonomyModal({ open: true, key });
     setTaxonomyInput('');
     setTaxonomyEditingIndex(null);
+    setTaxonomyParentCategory('');
   };
 
   const handleTaxonomySubmit = () => {
@@ -473,8 +484,14 @@ const CnpjProdutos = () => {
     const value = taxonomyInput.trim();
     if (!value) return;
 
+    const normalizedParent = taxonomyParentCategory.trim();
+    const finalValue =
+      activeTaxonomyKey === 'categories' && normalizedParent
+        ? `${normalizedParent} > ${value}`
+        : value;
+
     const duplicated = activeTaxonomyOptions.some(
-      (item, index) => item.toLowerCase() === value.toLowerCase() && index !== taxonomyEditingIndex
+      (item, index) => item.toLowerCase() === finalValue.toLowerCase() && index !== taxonomyEditingIndex
     );
 
     if (duplicated) {
@@ -485,9 +502,9 @@ const CnpjProdutos = () => {
     const next = [...activeTaxonomyOptions];
 
     if (taxonomyEditingIndex === null) {
-      next.push(value);
+      next.push(finalValue);
     } else {
-      next[taxonomyEditingIndex] = value;
+      next[taxonomyEditingIndex] = finalValue;
     }
 
     setTaxonomyOverrides((prev) => ({
@@ -496,6 +513,7 @@ const CnpjProdutos = () => {
     }));
     setTaxonomyInput('');
     setTaxonomyEditingIndex(null);
+    setTaxonomyParentCategory('');
   };
 
   const handleTaxonomyEditStart = (index: number) => {
@@ -503,6 +521,7 @@ const CnpjProdutos = () => {
     if (!selected) return;
     setTaxonomyEditingIndex(index);
     setTaxonomyInput(selected);
+    setTaxonomyParentCategory('');
   };
 
   const handleTaxonomyDelete = (index: number) => {
@@ -1060,7 +1079,7 @@ const CnpjProdutos = () => {
               </div>
               <div className="flex flex-col gap-2">
                 <Button onClick={handleSave} disabled={saving || uploadingPhotos}>
-                  {editing ? 'Atualizar produto' : 'Publicar'}
+                  {editing ? 'Atualizar produto' : 'Salvar'}
                 </Button>
                 <Button variant="outline" onClick={resetForm} disabled={saving || uploadingPhotos}>
                   Salvar como rascunho
@@ -1432,11 +1451,41 @@ const CnpjProdutos = () => {
           </DialogHeader>
 
           <div className="space-y-3">
+            {activeTaxonomyKey === 'categories' && (
+              <div className="space-y-1.5">
+                <Label>Categoria pai (opcional)</Label>
+                <Select
+                  value={taxonomyParentCategory || 'none'}
+                  onValueChange={(value) => setTaxonomyParentCategory(value === 'none' ? '' : value)}
+                  disabled={taxonomyEditingIndex !== null}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem categoria pai" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem categoria pai</SelectItem>
+                    {taxonomyParentOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Se selecionar categoria pai, o sistema criará no formato: Categoria &gt; Subcategoria.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <Input
                 value={taxonomyInput}
                 onChange={(e) => setTaxonomyInput(e.target.value)}
-                placeholder={`Nome da ${activeTaxonomyKey ? taxonomyLabels[activeTaxonomyKey].slice(0, -1) : 'opção'}`}
+                placeholder={
+                  activeTaxonomyKey === 'categories' && taxonomyParentCategory
+                    ? 'Nome da subcategoria'
+                    : `Nome da ${activeTaxonomyKey ? taxonomyLabels[activeTaxonomyKey].slice(0, -1) : 'opção'}`
+                }
               />
               <Button type="button" onClick={handleTaxonomySubmit} disabled={!taxonomyInput.trim()}>
                 {taxonomyEditingIndex === null ? 'Adicionar' : 'Salvar'}
