@@ -75,7 +75,7 @@ const PasswordChangeForm = () => {
     },
   };
 
-  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
+  const t = textByLocale[locale];
 
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });

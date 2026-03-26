@@ -90,7 +90,7 @@ const BasicInfoForm: React.FC<BasicInfoFormProps> = ({ userData, onInputChange, 
     },
   };
 
-  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
+  const t = textByLocale[locale];
 
   const initials = (userData.full_name || 'U')
     .trim()

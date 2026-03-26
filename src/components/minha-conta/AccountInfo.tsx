@@ -84,7 +84,7 @@ const AccountInfo: React.FC<AccountInfoProps> = ({ userData, onPremiumUnlock, on
     },
   };
 
-  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
+  const t = textByLocale[locale];
 
   const [secretStep, setSecretStep] = useState(0);
   const [lockStep, setLockStep] = useState(0);
