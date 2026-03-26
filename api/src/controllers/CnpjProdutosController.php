@@ -87,12 +87,14 @@ class CnpjProdutosController {
             $produtos = array_map([$this, 'normalizeProdutoRow'], $produtos);
 
             $storeMeta = $this->model->findPublicStoreMetaByCnpj($cnpjDigits);
-            $nomeEmpresa = !empty($storeMeta['nome_empresa'])
-                ? mb_substr(trim((string)$storeMeta['nome_empresa']), 0, 255)
+            $storeConfig = $this->extractPublicStoreConfig($storeMeta ?: []);
+
+            $nomeEmpresa = !empty($storeConfig['store_name'])
+                ? (string)$storeConfig['store_name']
                 : (!empty($produtos[0]['nome_empresa']) ? (string)$produtos[0]['nome_empresa'] : null);
 
-            $logoUrl = !empty($storeMeta['owner_avatar_url'])
-                ? mb_substr(trim((string)$storeMeta['owner_avatar_url']), 0, 2048)
+            $logoUrl = !empty($storeConfig['logo_url'])
+                ? (string)$storeConfig['logo_url']
                 : (!empty($produtos[0]['owner_avatar_url']) ? (string)$produtos[0]['owner_avatar_url'] : null);
 
             Response::success([
@@ -101,10 +103,94 @@ class CnpjProdutosController {
                     'cnpj' => $this->formatCnpj($cnpjDigits),
                     'avatar_url' => $logoUrl ?: null,
                 ],
+                'configuracao' => $storeConfig,
                 'produtos' => $produtos,
             ], 'Loja pública carregada com sucesso');
         } catch (Exception $e) {
             Response::error('Erro ao carregar loja pública: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function obterConfiguracaoLoja() {
+        try {
+            $userId = (int)(AuthMiddleware::getCurrentUserId() ?? 0);
+            if ($userId <= 0) {
+                Response::error('Usuário não autenticado', 401);
+                return;
+            }
+
+            $storeMeta = $this->model->getStoreConfigByUserId($userId);
+            if (!$storeMeta) {
+                Response::error('Usuário não encontrado', 404);
+                return;
+            }
+
+            $cnpjDigits = preg_replace('/\D+/', '', (string)($storeMeta['cnpj'] ?? ''));
+            $config = $this->extractPublicStoreConfig($storeMeta);
+
+            Response::success([
+                'empresa' => [
+                    'nome_empresa' => !empty($storeMeta['nome_empresa']) ? mb_substr(trim((string)$storeMeta['nome_empresa']), 0, 255) : null,
+                    'cnpj' => strlen($cnpjDigits) === 14 ? $this->formatCnpj($cnpjDigits) : null,
+                    'avatar_url' => !empty($storeMeta['owner_avatar_url']) ? mb_substr(trim((string)$storeMeta['owner_avatar_url']), 0, 2048) : null,
+                ],
+                'configuracao' => $config,
+            ], 'Configuração da loja carregada com sucesso');
+        } catch (Exception $e) {
+            Response::error('Erro ao obter configuração da loja: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function salvarConfiguracaoLoja() {
+        try {
+            $userId = (int)(AuthMiddleware::getCurrentUserId() ?? 0);
+            if ($userId <= 0) {
+                Response::error('Usuário não autenticado', 401);
+                return;
+            }
+
+            $input = $this->readJsonInput();
+            if (!$input) {
+                Response::error('Dados inválidos', 400);
+                return;
+            }
+
+            $validatedConfig = $this->validateStoreConfigInput($input);
+            $currentStoreMeta = $this->model->getStoreConfigByUserId($userId) ?: [];
+            $currentPreferences = $this->decodeJsonObject($currentStoreMeta['store_preferences'] ?? null);
+            $currentStorefront = isset($currentPreferences['storefront']) && is_array($currentPreferences['storefront'])
+                ? $currentPreferences['storefront']
+                : [];
+
+            $mergedStorefront = array_merge($currentStorefront, $validatedConfig);
+            $currentPreferences['storefront'] = $mergedStorefront;
+
+            $socialLinks = [
+                'whatsapp' => $mergedStorefront['whatsapp'] ?? null,
+                'instagram' => $mergedStorefront['instagram'] ?? null,
+            ];
+
+            $saved = $this->model->upsertStoreConfigByUserId($userId, [
+                'company' => $mergedStorefront['store_name'] ?? ($currentStoreMeta['nome_empresa'] ?? null),
+                'bio' => $mergedStorefront['description'] ?? ($currentStoreMeta['store_bio'] ?? null),
+                'website' => $mergedStorefront['website'] ?? ($currentStoreMeta['store_website'] ?? null),
+                'social_links' => json_encode($socialLinks, JSON_UNESCAPED_UNICODE),
+                'preferences' => json_encode($currentPreferences, JSON_UNESCAPED_UNICODE),
+            ]);
+
+            if (!$saved) {
+                Response::error('Não foi possível salvar a configuração da loja', 500);
+                return;
+            }
+
+            $updatedStoreMeta = $this->model->getStoreConfigByUserId($userId) ?: [];
+            Response::success([
+                'configuracao' => $this->extractPublicStoreConfig($updatedStoreMeta),
+            ], 'Configuração da loja salva com sucesso');
+        } catch (InvalidArgumentException $e) {
+            Response::error($e->getMessage(), 400);
+        } catch (Exception $e) {
+            Response::error('Erro ao salvar configuração da loja: ' . $e->getMessage(), 500);
         }
     }
 
@@ -604,6 +690,70 @@ class CnpjProdutosController {
         return $result;
     }
 
+    private function validateStoreConfigInput(array $input): array {
+        $storeName = mb_substr(trim((string)($input['store_name'] ?? '')), 0, 120);
+        if ($storeName === '' || mb_strlen($storeName) < 2) {
+            throw new InvalidArgumentException('Informe o nome da loja com pelo menos 2 caracteres');
+        }
+
+        $description = mb_substr(trim((string)($input['description'] ?? '')), 0, 500);
+        $website = trim((string)($input['website'] ?? ''));
+        $logoUrl = trim((string)($input['logo_url'] ?? ''));
+
+        if ($website !== '' && (!filter_var($website, FILTER_VALIDATE_URL) || mb_strlen($website) > 2048)) {
+            throw new InvalidArgumentException('Website inválido');
+        }
+
+        if ($logoUrl !== '' && (!filter_var($logoUrl, FILTER_VALIDATE_URL) || mb_strlen($logoUrl) > 2048)) {
+            throw new InvalidArgumentException('URL de logo inválida');
+        }
+
+        $whatsappDigits = preg_replace('/\D+/', '', (string)($input['whatsapp'] ?? ''));
+        if ($whatsappDigits !== '' && (strlen($whatsappDigits) < 10 || strlen($whatsappDigits) > 13)) {
+            throw new InvalidArgumentException('WhatsApp inválido. Use DDD + número com 10 a 13 dígitos');
+        }
+
+        $instagramRaw = trim((string)($input['instagram'] ?? ''));
+        $instagram = preg_replace('/[^a-zA-Z0-9._]/', '', str_replace('@', '', $instagramRaw));
+        $instagram = mb_substr((string)$instagram, 0, 60);
+
+        $pixEnabled = $this->toBooleanOrNull($input['pix_enabled'] ?? true);
+        if ($pixEnabled === null) {
+            throw new InvalidArgumentException('Valor inválido para pix_enabled');
+        }
+
+        $pixKeyType = trim((string)($input['pix_key_type'] ?? ''));
+        $pixKey = trim((string)($input['pix_key'] ?? ''));
+
+        if ($pixEnabled) {
+            if (!in_array($pixKeyType, ['cpf', 'cnpj', 'email', 'telefone', 'aleatoria'], true)) {
+                throw new InvalidArgumentException('Selecione um tipo de chave PIX válido');
+            }
+
+            if (!$this->isPixKeyValidByType($pixKeyType, $pixKey)) {
+                throw new InvalidArgumentException('Chave PIX inválida para o tipo selecionado');
+            }
+        } else {
+            $pixKeyType = '';
+            $pixKey = '';
+        }
+
+        $pixInstructions = mb_substr(trim((string)($input['pix_instructions'] ?? '')), 0, 240);
+
+        return [
+            'store_name' => $storeName,
+            'description' => $description !== '' ? $description : null,
+            'website' => $website !== '' ? $website : null,
+            'logo_url' => $logoUrl !== '' ? $logoUrl : null,
+            'whatsapp' => $whatsappDigits !== '' ? $whatsappDigits : null,
+            'instagram' => $instagram !== '' ? $instagram : null,
+            'pix_enabled' => $pixEnabled,
+            'pix_key_type' => $pixKeyType !== '' ? $pixKeyType : null,
+            'pix_key' => $pixKey !== '' ? $pixKey : null,
+            'pix_instructions' => $pixInstructions !== '' ? $pixInstructions : null,
+        ];
+    }
+
     private function isAdminUser(int $userId): bool {
         $stmt = $this->db->prepare('SELECT user_role FROM users WHERE id = ? LIMIT 1');
         $stmt->execute([$userId]);
@@ -692,6 +842,114 @@ class CnpjProdutosController {
             'cnpj' => $this->formatCnpj($digits),
             'nome_empresa' => $nomeEmpresa !== '' ? mb_substr($nomeEmpresa, 0, 255) : null,
         ];
+    }
+
+    private function extractPublicStoreConfig(array $storeMeta): array {
+        $preferences = $this->decodeJsonObject($storeMeta['store_preferences'] ?? null);
+        $storefront = isset($preferences['storefront']) && is_array($preferences['storefront'])
+            ? $preferences['storefront']
+            : [];
+        $socialLinks = $this->decodeJsonObject($storeMeta['store_social_links'] ?? null);
+
+        $pixEnabled = isset($storefront['pix_enabled'])
+            ? (bool)$storefront['pix_enabled']
+            : false;
+
+        return [
+            'store_name' => $this->limitNullableText($storefront['store_name'] ?? ($storeMeta['nome_empresa'] ?? null), 120),
+            'description' => $this->limitNullableText($storefront['description'] ?? ($storeMeta['store_bio'] ?? null), 500),
+            'website' => $this->normalizeNullableUrl($storefront['website'] ?? ($storeMeta['store_website'] ?? null)),
+            'logo_url' => $this->normalizeNullableUrl($storefront['logo_url'] ?? ($storeMeta['owner_avatar_url'] ?? null)),
+            'whatsapp' => $this->digitsOrNull($storefront['whatsapp'] ?? ($socialLinks['whatsapp'] ?? null), 13),
+            'instagram' => $this->limitNullableText($storefront['instagram'] ?? ($socialLinks['instagram'] ?? null), 60),
+            'pix_enabled' => $pixEnabled,
+            'pix_key_type' => $pixEnabled ? $this->limitNullableText($storefront['pix_key_type'] ?? null, 20) : null,
+            'pix_key' => $pixEnabled ? $this->limitNullableText($storefront['pix_key'] ?? null, 255) : null,
+            'pix_instructions' => $this->limitNullableText($storefront['pix_instructions'] ?? null, 240),
+        ];
+    }
+
+    private function decodeJsonObject($value): array {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function limitNullableText($value, int $max): ?string {
+        $text = trim((string)($value ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_substr($text, 0, $max);
+    }
+
+    private function normalizeNullableUrl($value): ?string {
+        $text = trim((string)($value ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        if (!filter_var($text, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        return mb_substr($text, 0, 2048);
+    }
+
+    private function digitsOrNull($value, int $maxLength = 32): ?string {
+        $digits = preg_replace('/\D+/', '', (string)($value ?? ''));
+        if ($digits === '') {
+            return null;
+        }
+
+        return mb_substr($digits, 0, $maxLength);
+    }
+
+    private function toBooleanOrNull($value): ?bool {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if ($value === 1 || $value === '1' || $value === 'true') {
+            return true;
+        }
+
+        if ($value === 0 || $value === '0' || $value === 'false') {
+            return false;
+        }
+
+        return null;
+    }
+
+    private function isPixKeyValidByType(string $type, string $key): bool {
+        $trimmed = trim($key);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        switch ($type) {
+            case 'cpf':
+                return strlen(preg_replace('/\D+/', '', $trimmed)) === 11;
+            case 'cnpj':
+                return strlen(preg_replace('/\D+/', '', $trimmed)) === 14;
+            case 'email':
+                return (bool)filter_var($trimmed, FILTER_VALIDATE_EMAIL);
+            case 'telefone':
+                $digits = preg_replace('/\D+/', '', $trimmed);
+                return strlen($digits) >= 10 && strlen($digits) <= 13;
+            case 'aleatoria':
+                return (bool)preg_match('/^[a-zA-Z0-9-]{20,80}$/', $trimmed);
+            default:
+                return false;
+        }
     }
 
     private function buildUploadFileUrl(string $filename): string {

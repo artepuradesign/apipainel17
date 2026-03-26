@@ -40,8 +40,22 @@ export interface PublicStoreCompany {
   avatar_url?: string | null;
 }
 
+export interface StorefrontConfig {
+  store_name?: string | null;
+  description?: string | null;
+  website?: string | null;
+  logo_url?: string | null;
+  whatsapp?: string | null;
+  instagram?: string | null;
+  pix_enabled?: boolean;
+  pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | null;
+  pix_key?: string | null;
+  pix_instructions?: string | null;
+}
+
 export interface PublicStoreResponse {
   empresa: PublicStoreCompany;
+  configuracao?: StorefrontConfig;
   produtos: CnpjProduto[];
 }
 
@@ -56,6 +70,11 @@ export interface CnpjProdutoSections {
   categories: string[];
   brands: string[];
   tags: string[];
+}
+
+export interface StoreConfigResponse {
+  empresa: PublicStoreCompany;
+  configuracao: StorefrontConfig;
 }
 
 export interface BarcodeLookupData {
@@ -221,5 +240,27 @@ export const cnpjProdutosService = {
   async lojaPublica(cnpj: string) {
     const cnpjDigits = cnpj.replace(/\D+/g, '');
     return apiRequest<PublicStoreResponse>(`/cnpj-produtos/loja-publica?cnpj=${encodeURIComponent(cnpjDigits)}`, { method: 'GET' }, false);
+  },
+
+  async obterConfiguracaoLoja() {
+    return apiRequest<StoreConfigResponse>('/cnpj-produtos/config-loja', { method: 'GET' });
+  },
+
+  async salvarConfiguracaoLoja(data: {
+    store_name: string;
+    description?: string;
+    website?: string;
+    logo_url?: string;
+    whatsapp?: string;
+    instagram?: string;
+    pix_enabled: boolean;
+    pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | '';
+    pix_key?: string;
+    pix_instructions?: string;
+  }) {
+    return apiRequest<{ configuracao: StorefrontConfig }>('/cnpj-produtos/config-loja', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 };

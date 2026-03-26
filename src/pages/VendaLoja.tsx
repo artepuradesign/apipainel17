@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShoppingCart, Store, Eye } from 'lucide-react';
+import { ShoppingCart, Store, Eye, Copy, MessageCircle, QrCode } from 'lucide-react';
 import { cnpjProdutosService, type CnpjProduto } from '@/services/cnpjProdutosService';
 import { normalizeProductPhotos, splitStoreSections, STORE_HIGHLIGHT_LABELS, getHighlightFromTags } from '@/components/cnpj-loja/storefrontUtils';
+import { toast } from 'sonner';
 
 const formatPrice = (value: number) =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -20,6 +21,16 @@ const VendaLoja = () => {
   const [error, setError] = useState('');
   const [empresa, setEmpresa] = useState<{ nome_empresa?: string | null; cnpj?: string | null; avatar_url?: string | null } | null>(null);
   const [produtos, setProdutos] = useState<CnpjProduto[]>([]);
+  const [configuracao, setConfiguracao] = useState<{
+    store_name?: string | null;
+    description?: string | null;
+    website?: string | null;
+    whatsapp?: string | null;
+    pix_enabled?: boolean;
+    pix_key_type?: string | null;
+    pix_key?: string | null;
+    pix_instructions?: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -41,6 +52,7 @@ const VendaLoja = () => {
       }
 
       setEmpresa(result.data.empresa);
+      setConfiguracao(result.data.configuracao || null);
       setProdutos(result.data.produtos || []);
       setLoading(false);
     };
@@ -49,6 +61,18 @@ const VendaLoja = () => {
   }, [cnpj]);
 
   const sections = useMemo(() => splitStoreSections(produtos), [produtos]);
+
+  const handleCopyPix = async () => {
+    const pixKey = configuracao?.pix_key?.trim();
+    if (!pixKey) return;
+
+    try {
+      await navigator.clipboard.writeText(pixKey);
+      toast.success('Chave PIX copiada');
+    } catch {
+      toast.error('Não foi possível copiar a chave PIX');
+    }
+  };
 
   const renderSection = (title: string, items: CnpjProduto[]) => {
     if (items.length === 0) return null;
@@ -162,11 +186,70 @@ const VendaLoja = () => {
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{empresa?.nome_empresa || 'Loja Online'}</h1>
                 <p className="break-all text-sm text-muted-foreground">CNPJ {empresa?.cnpj || '--'} • Catálogo público da empresa</p>
+                {configuracao?.description ? (
+                  <p className="mt-1 text-sm text-muted-foreground line-clamp-3">{configuracao.description}</p>
+                ) : null}
               </div>
             </div>
 
             <Badge variant="outline" className="w-fit">{sections.todos.length} produtos ativos</Badge>
           </div>
+
+          {(configuracao?.pix_enabled && configuracao?.pix_key) || configuracao?.whatsapp || configuracao?.website ? (
+            <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-3">
+              {configuracao?.pix_enabled && configuracao?.pix_key ? (
+                <Card className="border-border/60">
+                  <CardContent className="space-y-2 p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <QrCode className="h-4 w-4" />
+                      Pagamento via PIX
+                    </div>
+                    <p className="text-xs text-muted-foreground break-all">{configuracao.pix_key}</p>
+                    {configuracao?.pix_instructions ? (
+                      <p className="text-xs text-muted-foreground">{configuracao.pix_instructions}</p>
+                    ) : null}
+                    <Button type="button" size="sm" variant="outline" className="w-full" onClick={handleCopyPix}>
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar chave PIX
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {configuracao?.whatsapp ? (
+                <Card className="border-border/60">
+                  <CardContent className="space-y-2 p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <MessageCircle className="h-4 w-4" />
+                      Atendimento
+                    </div>
+                    <p className="text-xs text-muted-foreground">WhatsApp: {configuracao.whatsapp}</p>
+                    <Button asChild size="sm" variant="outline" className="w-full">
+                      <a
+                        href={`https://wa.me/${configuracao.whatsapp.replace(/\D+/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Chamar no WhatsApp
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {configuracao?.website ? (
+                <Card className="border-border/60">
+                  <CardContent className="space-y-2 p-3">
+                    <div className="text-sm font-semibold">Site oficial</div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 break-all">{configuracao.website}</p>
+                    <Button asChild size="sm" variant="outline" className="w-full">
+                      <a href={configuracao.website} target="_blank" rel="noreferrer">Acessar website</a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
+          ) : null}
         </header>
 
         {sections.todos.length === 0 ? (
