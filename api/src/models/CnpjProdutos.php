@@ -246,7 +246,7 @@ class CnpjProdutos extends BaseModel {
     }
 
     public function findPublicStoreMetaByCnpj(string $cnpjDigits): ?array {
-        $query = "SELECT u.full_name AS nome_empresa, u.cnpj, {$this->getOwnerAvatarSelectSql()}
+        $query = "SELECT {$this->getPublicStoreMetaSelectSql()}
                   FROM users u
                   {$this->getOwnerProfileJoinSql()}
                   WHERE REPLACE(REPLACE(REPLACE(u.cnpj, '.', ''), '/', ''), '-', '') = ?
@@ -257,6 +257,46 @@ class CnpjProdutos extends BaseModel {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $row ?: null;
+    }
+
+    public function getStoreConfigByUserId(int $userId): ?array {
+        $query = "SELECT {$this->getPublicStoreMetaSelectSql()}
+                  FROM users u
+                  {$this->getOwnerProfileJoinSql()}
+                  WHERE u.id = ?
+                  LIMIT 1";
+
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
+    public function upsertStoreConfigByUserId(int $userId, array $data): bool {
+        if (!$this->hasUserProfilesTable()) {
+            return false;
+        }
+
+        $ensureQuery = "INSERT INTO user_profiles (user_id, timezone, language, theme, created_at, updated_at)
+                        VALUES (?, 'America/Sao_Paulo', 'pt-BR', 'light', NOW(), NOW())
+                        ON DUPLICATE KEY UPDATE updated_at = NOW()";
+        $ensureStmt = $this->db->prepare($ensureQuery);
+        $ensureStmt->execute([$userId]);
+
+        $updateQuery = "UPDATE user_profiles
+                        SET company = ?, bio = ?, website = ?, social_links = ?, preferences = ?, updated_at = NOW()
+                        WHERE user_id = ?";
+
+        $updateStmt = $this->db->prepare($updateQuery);
+        return $updateStmt->execute([
+            $data['company'] ?? null,
+            $data['bio'] ?? null,
+            $data['website'] ?? null,
+            $data['social_links'] ?? null,
+            $data['preferences'] ?? null,
+            $userId,
+        ]);
     }
 
     public function updateProduto(int $id, array $fields): bool {
@@ -425,6 +465,26 @@ class CnpjProdutos extends BaseModel {
         return $this->hasUserProfilesTable()
             ? 'LEFT JOIN user_profiles up ON up.user_id = u.id'
             : '';
+    }
+
+    private function getPublicStoreMetaSelectSql(): string {
+        if ($this->hasUserProfilesTable()) {
+            return "COALESCE(NULLIF(up.company, ''), u.full_name) AS nome_empresa,
+                    u.cnpj,
+                    up.avatar_url AS owner_avatar_url,
+                    up.bio AS store_bio,
+                    up.website AS store_website,
+                    up.social_links AS store_social_links,
+                    up.preferences AS store_preferences";
+        }
+
+        return "u.full_name AS nome_empresa,
+                u.cnpj,
+                NULL AS owner_avatar_url,
+                NULL AS store_bio,
+                NULL AS store_website,
+                NULL AS store_social_links,
+                NULL AS store_preferences";
     }
 
     private function getDescriptionColumn(): ?string {
