@@ -152,7 +152,6 @@ const DashboardAdmin = () => {
 
   return (
     <div className="space-y-6 relative z-10">
-      <PageHeaderCard
       <DashboardTitleCard
         title={t.title}
         subtitle={t.subtitle}
