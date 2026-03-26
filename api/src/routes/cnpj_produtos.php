@@ -33,6 +33,8 @@ switch ($method) {
     case 'GET':
         if (strpos($path, '/cnpj-produtos/consultar-codigo') !== false) {
             $controller->consultarCodigoBarras();
+        } elseif (strpos($path, '/cnpj-produtos/config-loja') !== false) {
+            $controller->obterConfiguracaoLoja();
         } elseif (strpos($path, '/cnpj-produtos/list') !== false || $path === '/cnpj-produtos') {
             $controller->listProdutos();
         } else {
@@ -51,7 +53,9 @@ switch ($method) {
         break;
 
     case 'PUT':
-        if (strpos($path, '/cnpj-produtos/atualizar') !== false) {
+        if (strpos($path, '/cnpj-produtos/config-loja') !== false) {
+            $controller->salvarConfiguracaoLoja();
+        } elseif (strpos($path, '/cnpj-produtos/atualizar') !== false) {
             $controller->atualizar();
         } else {
             Response::notFound('Endpoint não encontrado');
