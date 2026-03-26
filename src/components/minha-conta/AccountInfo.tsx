@@ -27,7 +27,7 @@ const AccountInfo: React.FC<AccountInfoProps> = ({ userData, onPremiumUnlock, on
   const { isLoading } = useUserSubscription();
   const { locale } = useLocale();
 
-  const t = {
+  const textByLocale = {
     'pt-BR': {
       accountInfo: 'Informações da Conta',
       userId: 'ID do Usuário',
@@ -82,7 +82,9 @@ const AccountInfo: React.FC<AccountInfoProps> = ({ userData, onPremiumUnlock, on
       days: 'días',
       prepaid: 'Prepago',
     },
-  }[locale];
+  };
+
+  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
 
   const [secretStep, setSecretStep] = useState(0);
   const [lockStep, setLockStep] = useState(0);
