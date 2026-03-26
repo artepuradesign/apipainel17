@@ -141,7 +141,6 @@ const MenuSuperior = () => {
 
             <div className="md:hidden flex items-center gap-3">
               <TextLogo to="/dashboard" showFullOnMobile={!user} />
-              <ThemeSwitcher />
             </div>
 
             <div className="hidden md:flex items-center space-x-4">
