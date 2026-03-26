@@ -90,7 +90,6 @@ import ControlePessoalFinanceiro from '@/pages/dashboard/ControlePessoalFinancei
 import ControlePessoalNovoCliente from '@/pages/dashboard/ControlePessoalNovoCliente';
 import ControlePessoalRelatorios from '@/pages/dashboard/ControlePessoalRelatorios';
 import ControlePessoalVendaSimples from '@/pages/dashboard/ControlePessoalVendaSimples';
-import ControlePessoalDownload from '@/pages/dashboard/ControlePessoalDownload';
 
 import Indique from '@/pages/dashboard/Indique';
 import Revenda from '@/pages/dashboard/Revenda';
@@ -308,7 +307,6 @@ function App() {
                     <Route path="/dashboard/controlepessoal-novocliente" element={<DashboardLayout><ControlePessoalNovoCliente /></DashboardLayout>} />
                     <Route path="/dashboard/controlepessoal-relatorios" element={<DashboardLayout><ControlePessoalRelatorios /></DashboardLayout>} />
                     <Route path="/dashboard/controlepessoal-vendasimples" element={<DashboardLayout><ControlePessoalVendaSimples /></DashboardLayout>} />
-                    <Route path="/dashboard/controlepessoal-download" element={<DashboardLayout><ControlePessoalDownload /></DashboardLayout>} />
                     <Route path="/dashboard/historico" element={<DashboardLayout><Historico /></DashboardLayout>} />
                     <Route path="/dashboard/historico/consultas" element={<DashboardLayout><HistoricoConsultas /></DashboardLayout>} />
                     <Route path="/dashboard/historico/cadastros-api" element={<DashboardLayout><HistoricoCadastrosApi /></DashboardLayout>} />
