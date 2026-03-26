@@ -15,7 +15,7 @@ const PasswordChangeForm = () => {
   const { signOut } = useAuth();
   const { locale } = useLocale();
 
-  const t = {
+  const textByLocale = {
     'pt-BR': {
       title: 'Alterar Senha',
       currentPassword: 'Senha Atual *',
@@ -73,7 +73,9 @@ const PasswordChangeForm = () => {
       serverError: 'Error interno del servidor. Contacta al soporte.',
       connectionError: 'Error de conexión: verifica tu internet',
     },
-  }[locale];
+  };
+
+  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
 
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });

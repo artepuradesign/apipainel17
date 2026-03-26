@@ -30,7 +30,7 @@ interface BasicInfoFormProps {
 const BasicInfoForm: React.FC<BasicInfoFormProps> = ({ userData, onInputChange, onAvatarUpload, avatarUploading }) => {
   const { locale } = useLocale();
 
-  const t = {
+  const textByLocale = {
     'pt-BR': {
       title: 'Informações Básicas',
       fullName: 'Nome Completo *',
@@ -88,7 +88,9 @@ const BasicInfoForm: React.FC<BasicInfoFormProps> = ({ userData, onInputChange, 
       sendPhoto: 'Subir foto',
       sending: 'Subiendo...',
     },
-  }[locale];
+  };
+
+  const t = textByLocale[locale] ?? textByLocale['pt-BR'];
 
   const initials = (userData.full_name || 'U')
     .trim()
