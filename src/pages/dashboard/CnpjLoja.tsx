@@ -242,10 +242,17 @@ const CnpjLoja = () => {
 
     setSavingConfig(true);
     try {
-      const payload = parsed.data;
       const result = await cnpjProdutosService.salvarConfiguracaoLoja({
-        ...payload,
-        instagram: payload.instagram ? payload.instagram.replace('@', '') : '',
+        store_name: parsed.data.store_name,
+        description: parsed.data.description || '',
+        website: parsed.data.website || '',
+        logo_url: parsed.data.logo_url || '',
+        whatsapp: parsed.data.whatsapp || '',
+        instagram: parsed.data.instagram ? parsed.data.instagram.replace('@', '') : '',
+        pix_enabled: parsed.data.pix_enabled,
+        pix_key_type: parsed.data.pix_key_type || '',
+        pix_key: parsed.data.pix_key || '',
+        pix_instructions: parsed.data.pix_instructions || '',
       });
 
       if (!result.success) {
