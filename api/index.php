@@ -663,11 +663,6 @@ try {
         exit();
     }
 
-    if (strpos($endpoint, '/controlepessoal-download') === 0) {
-        include __DIR__ . '/src/routes/controlepessoal_download.php';
-        exit();
-    }
-
     // N8N - Integração Telegram
     if (strpos($endpoint, '/n8n') === 0) {
         error_log("N8N ROUTER: Redirecionando para n8n.php - endpoint: {$endpoint}");
