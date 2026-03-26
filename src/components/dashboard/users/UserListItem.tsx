@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Crown, User, Eye, Edit, Key, Trash2 } from 'lucide-react';
 import type { User as UserType } from "@/types/user";
 
@@ -61,17 +62,22 @@ const UserListItem = ({
     <div className="border rounded-lg p-3 md:p-4">
       <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
-          <div 
-            className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex-shrink-0 cursor-pointer hover:bg-primary/20 transition-colors"
+          <Avatar
+            className="w-8 h-8 md:w-10 md:h-10 flex-shrink-0 cursor-pointer ring-1 ring-border"
             onClick={() => navigate(`/dashboard/usuario/${user.id}`)}
             title="Ver detalhes completos"
           >
-            {user.role === 'suporte' ? (
-              <Crown className="h-4 w-4 md:h-5 md:w-5 text-yellow-600" />
-            ) : (
-              <User className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
-            )}
-          </div>
+            <AvatarImage src={user.avatar_url || undefined} alt={`Avatar de ${user.name}`} />
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {user.avatar_url ? (
+                (user.name || user.username || 'U').charAt(0).toUpperCase()
+              ) : user.role === 'suporte' ? (
+                <Crown className="h-4 w-4 md:h-5 md:w-5" />
+              ) : (
+                <User className="h-4 w-4 md:h-5 md:w-5" />
+              )}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1 md:gap-2 mb-1">
               <h4 className="font-medium text-sm md:text-base truncate">{user.name}</h4>
