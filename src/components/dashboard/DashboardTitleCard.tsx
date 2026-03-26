@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { useLiquidGlass } from "@/contexts/LiquidGlassContext";
-import { useTheme } from "@/components/ThemeProvider";
 import { cn } from "@/lib/utils";
 
 interface DashboardTitleCardProps {
@@ -27,8 +26,6 @@ const DashboardTitleCard = ({
 }: DashboardTitleCardProps) => {
   const navigate = useNavigate();
   const { config: liquidGlassConfig } = useLiquidGlass();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
 
   const glassStyle = useMemo<React.CSSProperties>(() => {
     if (!liquidGlassConfig.enabled) return {};
@@ -41,39 +38,47 @@ const DashboardTitleCard = ({
       borderRadius: `${liquidGlassConfig.cornerRadius}px`,
       backdropFilter: filter,
       WebkitBackdropFilter: filter,
-      background: `rgba(255,255,255,${bgAlpha})`,
-      boxShadow: `0 0 ${liquidGlassConfig.softness}px rgba(255,255,255,${specHighAlpha}), inset 0 1px 0 rgba(255,255,255,${specLowAlpha})`,
+      background: `hsl(var(--card) / ${Math.min(bgAlpha, 0.92)})`,
+      boxShadow: `0 0 ${liquidGlassConfig.softness}px hsl(var(--foreground) / ${specHighAlpha}), inset 0 1px 0 hsl(var(--background) / ${specLowAlpha})`,
       opacity: liquidGlassConfig.opacity / 100,
-      border: `1px solid rgba(255,255,255,${borderAlpha})`,
+      border: `1px solid hsl(var(--border) / ${Math.min(borderAlpha, 0.7)})`,
     };
-  }, [liquidGlassConfig, isDark]);
+  }, [liquidGlassConfig]);
 
   return (
     <Card 
       className={cn(
+        "border-border/70",
         liquidGlassConfig.enabled && "bg-transparent border-transparent"
       )}
       style={liquidGlassConfig.enabled ? glassStyle : undefined}
     >
-      <CardHeader className="p-3 sm:p-6">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              {icon ? <span className="shrink-0 text-primary">{icon}</span> : null}
-              <span className="truncate">{title}</span>
-            </CardTitle>
-            {subtitle ? (
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">{subtitle}</p>
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex flex-1 items-start gap-3">
+            {icon ? (
+              <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted/60 text-primary">
+                {icon}
+              </span>
             ) : null}
+
+            <div className="min-w-0">
+              <CardTitle className="text-base sm:text-xl font-semibold tracking-tight leading-tight">
+                <span className="block truncate">{title}</span>
+              </CardTitle>
+            {subtitle ? (
+                <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">{subtitle}</p>
+            ) : null}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {right ? right : null}
             <Button
               variant="outline"
               size="icon"
               onClick={() => navigate(backTo)}
-              className="rounded-full h-9 w-9"
+              className="h-10 w-10 rounded-full border-border bg-background/80 hover:bg-accent"
               aria-label="Voltar"
               title="Voltar"
             >

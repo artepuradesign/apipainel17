@@ -33,7 +33,7 @@ const MinhaConta = () => {
     handleAvatarUpload,
   } = useMinhaContaData();
 
-  const i18n = {
+  const translations = {
     'pt-BR': {
       personalData: 'Dados Pessoais',
       myAccount: 'Minha Conta',
@@ -64,7 +64,9 @@ const MinhaConta = () => {
       saving: 'Guardando...',
       saveInfo: 'Guardar información',
     },
-  }[locale];
+  };
+
+  const i18n = translations[locale] ?? translations['pt-BR'];
 
   const handlePremiumUnlock = () => {
     setShowLightning(true);
@@ -112,6 +114,7 @@ const MinhaConta = () => {
       {isNewRoute ? (
         <DashboardTitleCard
           title={pageTitle}
+          subtitle={pageSubtitle}
           icon={<User className="h-4 w-4 sm:h-5 sm:w-5" />}
         />
       ) : (

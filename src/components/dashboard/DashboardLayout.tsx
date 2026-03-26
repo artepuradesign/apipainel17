@@ -60,6 +60,54 @@ const DashboardLayout = ({
     // Mobile e tablet: recolhida | Desktop: expandida
     setCollapsed(isMobile || isTablet);
   }, [isMobile, isTablet]);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    const previousViewport = viewportMeta?.getAttribute('content') ?? null;
+    const previousHtmlOverflowX = html.style.overflowX;
+    const previousBodyOverflowX = body.style.overflowX;
+    const previousHtmlTouchAction = html.style.touchAction;
+    const previousBodyTouchAction = body.style.touchAction;
+
+    const preventGesture = (event: Event) => event.preventDefault();
+    const preventZoomWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+      }
+    };
+
+    if (isMobile) {
+      html.style.overflowX = 'hidden';
+      body.style.overflowX = 'hidden';
+      html.style.touchAction = 'pan-y';
+      body.style.touchAction = 'pan-y';
+
+      if (viewportMeta) {
+        viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+      }
+
+      document.addEventListener('gesturestart', preventGesture, { passive: false });
+      document.addEventListener('gesturechange', preventGesture, { passive: false });
+      document.addEventListener('wheel', preventZoomWheel, { passive: false });
+    }
+
+    return () => {
+      html.style.overflowX = previousHtmlOverflowX;
+      body.style.overflowX = previousBodyOverflowX;
+      html.style.touchAction = previousHtmlTouchAction;
+      body.style.touchAction = previousBodyTouchAction;
+
+      if (viewportMeta && previousViewport) {
+        viewportMeta.setAttribute('content', previousViewport);
+      }
+
+      document.removeEventListener('gesturestart', preventGesture);
+      document.removeEventListener('gesturechange', preventGesture);
+      document.removeEventListener('wheel', preventZoomWheel);
+    };
+  }, [isMobile]);
   
   // Prevenir duplicação de notificações
   useNotificationDuplicationPrevention();
@@ -153,7 +201,7 @@ const DashboardLayout = ({
   };
 
   return (
-    <div className={`${theme === 'dark' ? 'dark' : ''} min-h-screen relative`}>
+    <div className={`${theme === 'dark' ? 'dark' : ''} min-h-screen relative overflow-x-hidden`}>
       <GlobalAnimatedBackground variant="dashboard" />
       
       {/* Notificações de fundo para toasts */}
@@ -196,7 +244,7 @@ const DashboardLayout = ({
               ${!isMobile && !collapsed ? 'ml-0' : ''}
             `}
           >
-            <div className="w-full">
+              <div className="w-full max-w-full overflow-x-hidden">
               {children}
             </div>
           </main>
