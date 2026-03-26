@@ -79,6 +79,7 @@ const GestaoUsuarios = () => {
           username: user.login || user.email?.split('@')[0] || '',
           name: user.name || user.full_name || '',
           email: user.email || '',
+          avatar_url: user.avatar_url || null,
           role: (user.user_role === 'admin' || user.user_role === 'suporte') ? 'suporte' : 'assinante' as 'assinante' | 'suporte',
           user_role: user.user_role || 'assinante', // Role original da API
           plan: user.plan || user.tipoplano || 'Pré-Pago',
