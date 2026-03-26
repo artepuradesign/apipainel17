@@ -7,6 +7,7 @@ class CnpjProdutos extends BaseModel {
     protected $table = 'cnpj_produtos';
     private $descriptionColumn = null;
     private $descriptionColumnResolved = false;
+    private ?bool $userProfilesTableExists = null;
 
     public function __construct($db) {
         parent::__construct($db);
@@ -44,10 +45,10 @@ class CnpjProdutos extends BaseModel {
         }
 
         $whereSql = 'WHERE ' . implode(' AND ', $where);
-        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM {$this->table} p
                   LEFT JOIN users u ON u.id = p.user_id
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   {$whereSql}
                   ORDER BY p.id DESC
                   LIMIT ? OFFSET ?";
@@ -102,10 +103,10 @@ class CnpjProdutos extends BaseModel {
     }
 
     public function findByIdForUser(int $id, int $userId, bool $isAdmin): ?array {
-        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM {$this->table} p
                   LEFT JOIN users u ON u.id = p.user_id
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   WHERE p.id = ? AND p.ativo = 1";
         $params = [$id];
 
@@ -124,10 +125,10 @@ class CnpjProdutos extends BaseModel {
     }
 
     public function findPublicById(int $id): ?array {
-        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM {$this->table} p
                   LEFT JOIN users u ON u.id = p.user_id
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   WHERE p.id = ?
                     AND p.ativo = 1
                     AND p.status = 'ativo'
@@ -146,10 +147,10 @@ class CnpjProdutos extends BaseModel {
             return null;
         }
 
-        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM {$this->table} p
                   LEFT JOIN users u ON u.id = p.user_id
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   WHERE p.ativo = 1
                     AND REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.codigo_barras, ''), ' ', ''), '.', ''), '-', ''), '/', '') = ?";
         $params = [$normalizedBarcode];
@@ -229,10 +230,10 @@ class CnpjProdutos extends BaseModel {
     }
 
     public function listPublicByCnpj(string $cnpjDigits, int $limit = 120): array {
-        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT p.*, u.full_name AS owner_name, u.cnpj AS owner_cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM {$this->table} p
                   LEFT JOIN users u ON u.id = p.user_id
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   WHERE p.ativo = 1
                     AND p.status = 'ativo'
                     AND REPLACE(REPLACE(REPLACE(p.cnpj, '.', ''), '/', ''), '-', '') = ?
@@ -245,9 +246,9 @@ class CnpjProdutos extends BaseModel {
     }
 
     public function findPublicStoreMetaByCnpj(string $cnpjDigits): ?array {
-        $query = "SELECT u.full_name AS nome_empresa, u.cnpj, up.avatar_url AS owner_avatar_url
+        $query = "SELECT u.full_name AS nome_empresa, u.cnpj, {$this->getOwnerAvatarSelectSql()}
                   FROM users u
-                  LEFT JOIN user_profiles up ON up.user_id = u.id
+                  {$this->getOwnerProfileJoinSql()}
                   WHERE REPLACE(REPLACE(REPLACE(u.cnpj, '.', ''), '/', ''), '-', '') = ?
                   LIMIT 1";
 
@@ -403,6 +404,27 @@ class CnpjProdutos extends BaseModel {
         $stmt = $this->db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
         $stmt->execute([$tableName]);
         return ((int)$stmt->fetchColumn()) > 0;
+    }
+
+    private function hasUserProfilesTable(): bool {
+        if ($this->userProfilesTableExists !== null) {
+            return $this->userProfilesTableExists;
+        }
+
+        $this->userProfilesTableExists = $this->tableExists('user_profiles');
+        return $this->userProfilesTableExists;
+    }
+
+    private function getOwnerAvatarSelectSql(): string {
+        return $this->hasUserProfilesTable()
+            ? 'up.avatar_url AS owner_avatar_url'
+            : 'NULL AS owner_avatar_url';
+    }
+
+    private function getOwnerProfileJoinSql(): string {
+        return $this->hasUserProfilesTable()
+            ? 'LEFT JOIN user_profiles up ON up.user_id = u.id'
+            : '';
     }
 
     private function getDescriptionColumn(): ?string {
