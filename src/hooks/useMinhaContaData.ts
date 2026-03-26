@@ -42,11 +42,11 @@ interface UserData {
   subscription_status?: string;
 }
 
-const formatBirthDateToBR = (value?: string): string | undefined => {
-  if (!value) return value;
+const formatBirthDateToBR = (value?: unknown): string | undefined => {
+  if (value === null || value === undefined) return undefined;
 
-  const trimmed = value.trim();
-  if (!trimmed) return trimmed;
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
 
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
     return trimmed;
@@ -60,9 +60,9 @@ const formatBirthDateToBR = (value?: string): string | undefined => {
 
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) {
-    const day = String(parsed.getDate()).padStart(2, '0');
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    const year = parsed.getFullYear();
+    const day = String(parsed.getUTCDate()).padStart(2, '0');
+    const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+    const year = parsed.getUTCFullYear();
     return `${day}/${month}/${year}`;
   }
 
