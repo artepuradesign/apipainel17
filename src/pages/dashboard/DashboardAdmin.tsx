@@ -3,7 +3,8 @@ import React, { useEffect } from 'react';
 import UnifiedAdminStatsCards from '@/components/dashboard/UnifiedAdminStatsCards';
 import AdminRecentTransactions from '@/components/dashboard/AdminRecentTransactions';
 import OnlineUsersLeaderboard from '@/components/dashboard/OnlineUsersLeaderboard';
-import PageHeaderCard from '@/components/dashboard/PageHeaderCard';
+import DashboardTitleCard from '@/components/dashboard/DashboardTitleCard';
+import { ShieldCheck } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useApiDashboardAdmin } from '@/hooks/useApiDashboardAdmin';
@@ -152,8 +153,11 @@ const DashboardAdmin = () => {
   return (
     <div className="space-y-6 relative z-10">
       <PageHeaderCard
+      <DashboardTitleCard
         title={t.title}
         subtitle={t.subtitle}
+        icon={<ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />}
+        backTo="/dashboard"
       />
 
       {/* Stats Cards Unificados - 3 linhas de 4 cards */}
