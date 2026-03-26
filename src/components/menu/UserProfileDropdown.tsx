@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserSubscription } from '@/hooks/useUserSubscription';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, User, Settings, LogOut, Crown } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +43,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ onLogout }) =
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-accent/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Avatar className="h-8 w-8 ring-2 ring-primary/20">
+            <AvatarImage src={profile.avatar_url || user.avatar_url || undefined} alt={`Avatar de ${displayName}`} />
             <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white text-xs font-semibold">
               {getInitials(displayName)}
             </AvatarFallback>
