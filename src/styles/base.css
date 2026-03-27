@@ -158,20 +158,12 @@
 }
 
 /* ===== Mobile App-like Behavior ===== */
-/* Prevent overscroll bounce */
+/* Permite scroll vertical e bloqueia apenas scroll horizontal */
 html, body {
-  overscroll-behavior: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
-}
-
-/* Hide scrollbars globally but keep scroll functionality */
-* {
-  -ms-overflow-style: none; /* IE/Edge */
-  scrollbar-width: none; /* Firefox */
-}
-
-*::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
 }
 
 /* Safe area insets for notched devices */
