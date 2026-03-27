@@ -8,6 +8,7 @@ class CnpjProdutos extends BaseModel {
     private $descriptionColumn = null;
     private $descriptionColumnResolved = false;
     private ?bool $userProfilesTableExists = null;
+    private array $userProfilesColumns = [];
 
     public function __construct($db) {
         parent::__construct($db);
@@ -278,25 +279,42 @@ class CnpjProdutos extends BaseModel {
             return false;
         }
 
-        $ensureQuery = "INSERT INTO user_profiles (user_id, timezone, language, theme, created_at, updated_at)
-                        VALUES (?, 'America/Sao_Paulo', 'pt-BR', 'light', NOW(), NOW())
+        $ensureQuery = "INSERT INTO user_profiles (user_id, created_at, updated_at)
+                        VALUES (?, NOW(), NOW())
                         ON DUPLICATE KEY UPDATE updated_at = NOW()";
         $ensureStmt = $this->db->prepare($ensureQuery);
         $ensureStmt->execute([$userId]);
 
-        $updateQuery = "UPDATE user_profiles
-                        SET company = ?, bio = ?, website = ?, social_links = ?, preferences = ?, updated_at = NOW()
-                        WHERE user_id = ?";
+        $sets = [];
+        $params = [];
 
+        $columnMap = [
+            'company' => 'company',
+            'bio' => 'bio',
+            'website' => 'website',
+            'social_links' => 'social_links',
+            'preferences' => 'preferences',
+        ];
+
+        foreach ($columnMap as $column => $key) {
+            if ($this->userProfilesColumnExists($column)) {
+                $sets[] = "{$column} = ?";
+                $params[] = $data[$key] ?? null;
+            }
+        }
+
+        if ($this->userProfilesColumnExists('updated_at')) {
+            $sets[] = 'updated_at = NOW()';
+        }
+
+        if (empty($sets)) {
+            return true;
+        }
+
+        $params[] = $userId;
+        $updateQuery = 'UPDATE user_profiles SET ' . implode(', ', $sets) . ' WHERE user_id = ?';
         $updateStmt = $this->db->prepare($updateQuery);
-        return $updateStmt->execute([
-            $data['company'] ?? null,
-            $data['bio'] ?? null,
-            $data['website'] ?? null,
-            $data['social_links'] ?? null,
-            $data['preferences'] ?? null,
-            $userId,
-        ]);
+        return $updateStmt->execute($params);
     }
 
     public function updateProduto(int $id, array $fields): bool {
@@ -456,7 +474,7 @@ class CnpjProdutos extends BaseModel {
     }
 
     private function getOwnerAvatarSelectSql(): string {
-        return $this->hasUserProfilesTable()
+        return ($this->hasUserProfilesTable() && $this->userProfilesColumnExists('avatar_url'))
             ? 'up.avatar_url AS owner_avatar_url'
             : 'NULL AS owner_avatar_url';
     }
@@ -469,13 +487,22 @@ class CnpjProdutos extends BaseModel {
 
     private function getPublicStoreMetaSelectSql(): string {
         if ($this->hasUserProfilesTable()) {
-            return "COALESCE(NULLIF(up.company, ''), u.full_name) AS nome_empresa,
+            $companySelect = $this->userProfilesColumnExists('company')
+                ? "COALESCE(NULLIF(up.company, ''), u.full_name)"
+                : 'u.full_name';
+            $avatarSelect = $this->userProfilesColumnExists('avatar_url') ? 'up.avatar_url' : 'NULL';
+            $bioSelect = $this->userProfilesColumnExists('bio') ? 'up.bio' : 'NULL';
+            $websiteSelect = $this->userProfilesColumnExists('website') ? 'up.website' : 'NULL';
+            $socialSelect = $this->userProfilesColumnExists('social_links') ? 'up.social_links' : 'NULL';
+            $preferencesSelect = $this->userProfilesColumnExists('preferences') ? 'up.preferences' : 'NULL';
+
+            return "{$companySelect} AS nome_empresa,
                     u.cnpj,
-                    up.avatar_url AS owner_avatar_url,
-                    up.bio AS store_bio,
-                    up.website AS store_website,
-                    up.social_links AS store_social_links,
-                    up.preferences AS store_preferences";
+                    {$avatarSelect} AS owner_avatar_url,
+                    {$bioSelect} AS store_bio,
+                    {$websiteSelect} AS store_website,
+                    {$socialSelect} AS store_social_links,
+                    {$preferencesSelect} AS store_preferences";
         }
 
         return "u.full_name AS nome_empresa,
@@ -505,5 +532,22 @@ class CnpjProdutos extends BaseModel {
         $this->descriptionColumn = null;
         $this->descriptionColumnResolved = true;
         return null;
+    }
+
+    private function userProfilesColumnExists(string $columnName): bool {
+        if (!$this->hasUserProfilesTable()) {
+            return false;
+        }
+
+        if (array_key_exists($columnName, $this->userProfilesColumns)) {
+            return $this->userProfilesColumns[$columnName];
+        }
+
+        $stmt = $this->db->prepare('SHOW COLUMNS FROM user_profiles LIKE ?');
+        $stmt->execute([$columnName]);
+        $exists = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        $this->userProfilesColumns[$columnName] = $exists;
+
+        return $exists;
     }
 }
