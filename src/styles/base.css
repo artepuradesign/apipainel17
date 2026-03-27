@@ -161,9 +161,14 @@
 /* Permite scroll vertical e bloqueia apenas scroll horizontal */
 html, body {
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: auto !important;
   overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  overflow-x: hidden;
 }
 
 /* Safe area insets for notched devices */
@@ -179,8 +184,4 @@ body {
     -webkit-tap-highlight-color: transparent;
   }
   
-  /* Prevent pull-to-refresh on mobile */
-  body {
-    overscroll-behavior-y: contain;
-  }
 }
