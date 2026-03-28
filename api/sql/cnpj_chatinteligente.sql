@@ -28,13 +28,17 @@ CREATE TABLE IF NOT EXISTS cnpj_chatinteligente_connections (
   whatsapp_number VARCHAR(20) NOT NULL,
   connection_status ENUM('pendente','conectado','desconectado') NOT NULL DEFAULT 'pendente',
   qr_code LONGTEXT NULL,
+  integration_token VARCHAR(128) NULL,
+  pairing_code VARCHAR(80) NULL,
+  connection_error TEXT NULL,
   last_connected_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_chat_conn_user (user_id),
   KEY idx_chat_conn_module (module_id),
-  KEY idx_chat_conn_status (connection_status)
+  KEY idx_chat_conn_status (connection_status),
+  UNIQUE KEY uq_chat_conn_token (integration_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Compatível com phpMyAdmin: removido bloco PREPARE/EXECUTE.
@@ -44,3 +48,10 @@ CREATE TABLE IF NOT EXISTS cnpj_chatinteligente_connections (
 --
 -- ALTER TABLE cnpj_chatinteligente_connections
 --   ADD COLUMN connection_status ENUM('pendente','conectado','desconectado') NOT NULL DEFAULT 'pendente' AFTER whatsapp_number;
+--
+-- ALTER TABLE cnpj_chatinteligente_connections
+--   ADD COLUMN integration_token VARCHAR(128) NULL AFTER qr_code,
+--   ADD COLUMN pairing_code VARCHAR(80) NULL AFTER integration_token,
+--   ADD COLUMN connection_error TEXT NULL AFTER pairing_code;
+--
+-- CREATE UNIQUE INDEX uq_chat_conn_token ON cnpj_chatinteligente_connections (integration_token);
