@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Bot, KeyRound, MessageSquareText, Save, Link as LinkIcon } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { toast } from 'sonner';
 import SimpleTitleBar from '@/components/dashboard/SimpleTitleBar';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useApiModules } from '@/hooks/useApiModules';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserSubscription } from '@/hooks/useUserSubscription';
+import { cnpjChatInteligenteService } from '@/services/cnpjChatInteligenteService';
+
+const MODULE_ID = 187;
 
 const agentSchema = z.object({
   apiKey: z.string().trim().min(20, 'Informe uma API Key válida da OpenAI').max(255, 'API Key inválida'),
@@ -19,14 +26,59 @@ const agentSchema = z.object({
 
 const CnpjChatInteligente = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { modules } = useApiModules();
+  const { hasActiveSubscription, subscription, discountPercentage, calculateDiscountedPrice } = useUserSubscription();
   const [form, setForm] = useState({
     apiKey: '',
     agentName: '',
     prompt: '',
   });
   const [saving, setSaving] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
+
+  const currentModule = useMemo(
+    () => (modules || []).find((module: any) => Number(module?.id) === MODULE_ID) || null,
+    [modules]
+  );
+
+  const ModuleIcon = useMemo(() => {
+    const iconName = String(currentModule?.icon || 'Bot');
+    const IconComponent = (LucideIcons as any)[iconName];
+    return IconComponent || Bot;
+  }, [currentModule?.icon]);
+
+  const modulePrice = useMemo(() => Number(currentModule?.price ?? 0), [currentModule?.price]);
+  const { discountedPrice: finalPrice, hasDiscount } = hasActiveSubscription && modulePrice > 0
+    ? calculateDiscountedPrice(modulePrice)
+    : { discountedPrice: modulePrice, hasDiscount: false };
+  const userPlan = hasActiveSubscription && subscription
+    ? subscription.plan_name
+    : (user ? localStorage.getItem(`user_plan_${user.id}`) || 'Pré-Pago' : 'Pré-Pago');
 
   const canFillMainFields = useMemo(() => form.apiKey.trim().length > 0, [form.apiKey]);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      setLoadingConfig(true);
+      const result = await cnpjChatInteligenteService.getAgentConfig();
+
+      if (result.success && result.data) {
+        setForm((prev) => ({
+          ...prev,
+          agentName: result.data?.agent_name || '',
+          prompt: result.data?.prompt || '',
+          apiKey: '',
+        }));
+        setHasSavedApiKey(Boolean(result.data?.has_api_key));
+      }
+
+      setLoadingConfig(false);
+    };
+
+    void loadConfig();
+  }, []);
 
   const handleSave = async () => {
     const parsed = agentSchema.safeParse(form);
@@ -37,7 +89,20 @@ const CnpjChatInteligente = () => {
 
     setSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const result = await cnpjChatInteligenteService.saveAgentConfig({
+        agent_name: parsed.data.agentName,
+        prompt: parsed.data.prompt,
+        openai_api_key: parsed.data.apiKey,
+        keep_existing_api_key: !parsed.data.apiKey.trim() && hasSavedApiKey,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Não foi possível salvar a configuração do agente');
+        return;
+      }
+
+      setHasSavedApiKey(true);
+      setForm((prev) => ({ ...prev, apiKey: '' }));
       toast.success('Configuração do agente salva com sucesso');
     } finally {
       setSaving(false);
@@ -47,10 +112,11 @@ const CnpjChatInteligente = () => {
   return (
     <div className="space-y-4 sm:space-y-6 px-1 sm:px-0 max-w-full overflow-x-hidden">
       <SimpleTitleBar
-        title="CNPJ Chat Inteligente"
-        subtitle="Configure seu agente de IA para atendimento no WhatsApp"
-        icon={<Bot className="h-4 w-4 sm:h-5 sm:w-5" />}
+        title={currentModule?.title || 'CNPJ Chat Inteligente'}
+        subtitle={currentModule?.description || 'Configure seu agente de IA para atendimento no WhatsApp'}
+        icon={<ModuleIcon className="h-4 w-4 sm:h-5 sm:w-5" />}
         onBack={() => navigate('/dashboard/cnpj-produtos')}
+        useModuleMetadata={false}
         right={
           <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/cpnj-conexoes')}>
             <LinkIcon className="mr-2 h-4 w-4" />
@@ -58,6 +124,22 @@ const CnpjChatInteligente = () => {
           </Button>
         }
       />
+
+      <Card>
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Plano Ativo</p>
+              <p className="text-sm sm:text-base font-semibold truncate">{userPlan}</p>
+            </div>
+            <div className="text-right shrink-0">
+              {hasDiscount ? <p className="text-xs text-muted-foreground line-through">R$ {modulePrice.toFixed(2)}</p> : null}
+              <p className="text-lg sm:text-xl font-bold">R$ {finalPrice.toFixed(2)}</p>
+              <p className="text-[10px] text-muted-foreground">Valor do módulo {MODULE_ID}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="space-y-3">
@@ -79,10 +161,11 @@ const CnpjChatInteligente = () => {
             <Input
               id="apiKey"
               type="password"
-              placeholder="sk-..."
+              placeholder={hasSavedApiKey ? 'Chave já cadastrada (preencha para substituir)' : 'sk-...'}
               value={form.apiKey}
               onChange={(event) => setForm((prev) => ({ ...prev, apiKey: event.target.value }))}
             />
+            {hasSavedApiKey ? <p className="text-xs text-muted-foreground">Já existe uma chave salva para este agente.</p> : null}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -91,7 +174,7 @@ const CnpjChatInteligente = () => {
               <Input
                 id="agentName"
                 placeholder="Ex.: Assistente Comercial"
-                disabled={!canFillMainFields}
+                disabled={!canFillMainFields && !hasSavedApiKey}
                 value={form.agentName}
                 onChange={(event) => setForm((prev) => ({ ...prev, agentName: event.target.value }))}
               />
@@ -112,7 +195,7 @@ const CnpjChatInteligente = () => {
               id="prompt"
               placeholder="Explique como o agente deve responder, tom de voz, regras e limites..."
               className="min-h-44"
-              disabled={!canFillMainFields}
+              disabled={!canFillMainFields && !hasSavedApiKey}
               value={form.prompt}
               onChange={(event) => setForm((prev) => ({ ...prev, prompt: event.target.value }))}
             />
@@ -122,7 +205,7 @@ const CnpjChatInteligente = () => {
             <Button variant="outline" onClick={() => navigate('/dashboard/cpnj-conexoes')}>
               Configurar conexão WhatsApp
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || loadingConfig}>
               <Save className="mr-2 h-4 w-4" />
               {saving ? 'Salvando...' : 'Salvar agente'}
             </Button>
