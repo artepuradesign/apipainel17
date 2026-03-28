@@ -19,7 +19,7 @@ import { cnpjChatInteligenteService } from '@/services/cnpjChatInteligenteServic
 const MODULE_ID = 187;
 
 const agentSchema = z.object({
-  apiKey: z.string().trim().min(20, 'Informe uma API Key válida da OpenAI').max(255, 'API Key inválida'),
+  apiKey: z.string().trim().max(255, 'API Key inválida').optional().or(z.literal('')),
   agentName: z.string().trim().min(2, 'Informe o nome do agente').max(80, 'Máximo de 80 caracteres'),
   prompt: z.string().trim().min(20, 'Informe um prompt com mais contexto').max(5000, 'Máximo de 5000 caracteres'),
 });
@@ -28,7 +28,7 @@ const CnpjChatInteligente = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { modules } = useApiModules();
-  const { hasActiveSubscription, subscription, discountPercentage, calculateDiscountedPrice } = useUserSubscription();
+  const { hasActiveSubscription, subscription, calculateDiscountedPrice } = useUserSubscription();
   const [form, setForm] = useState({
     apiKey: '',
     agentName: '',
@@ -81,6 +81,11 @@ const CnpjChatInteligente = () => {
   }, []);
 
   const handleSave = async () => {
+    if (!hasSavedApiKey && form.apiKey.trim().length < 20) {
+      toast.error('Informe uma API Key válida da OpenAI');
+      return;
+    }
+
     const parsed = agentSchema.safeParse(form);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message || 'Verifique os campos do agente');
