@@ -38,6 +38,7 @@ const CpnjConexoes = () => {
         title="Conexões do Chat"
         subtitle="Conecte o WhatsApp para o agente de IA atender seus clientes"
         icon={<LinkIcon className="h-4 w-4 sm:h-5 sm:w-5" />}
+        onBack={() => navigate('/dashboard/cnpj-chatinteligente')}
         right={
           <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/cnpj-chatinteligente')}>
             <Bot className="mr-2 h-4 w-4" />
