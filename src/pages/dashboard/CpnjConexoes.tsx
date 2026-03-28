@@ -20,7 +20,7 @@ const CpnjConexoes = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { modules } = useApiModules();
-  const { hasActiveSubscription, subscription, discountPercentage, calculateDiscountedPrice } = useUserSubscription();
+  const { hasActiveSubscription, subscription, calculateDiscountedPrice } = useUserSubscription();
   const [sessionName, setSessionName] = useState('Minha conexão WhatsApp');
   const [phone, setPhone] = useState('');
   const [connecting, setConnecting] = useState(false);
