@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, Smartphone, Link as LinkIcon, Bot, CheckCircle2 } from 'lucide-react';
+import { QrCode, Smartphone, Link as LinkIcon, Bot, CheckCircle2, RefreshCw, Copy, ShieldCheck, SmartphoneNfc } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { toast } from 'sonner';
 import SimpleTitleBar from '@/components/dashboard/SimpleTitleBar';
@@ -13,6 +13,7 @@ import { useApiModules } from '@/hooks/useApiModules';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserSubscription } from '@/hooks/useUserSubscription';
 import { cnpjChatInteligenteService, type WhatsAppConnection } from '@/services/cnpjChatInteligenteService';
+import { fetchApiConfig, getApiUrl } from '@/config/api';
 
 const MODULE_ID = 188;
 
@@ -25,6 +26,10 @@ const CpnjConexoes = () => {
   const [phone, setPhone] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
+  const [keepConnected, setKeepConnected] = useState<boolean>(() => localStorage.getItem('cnpj_keep_connected_browser') !== '0');
+  const [apiBase, setApiBase] = useState('https://api.apipainel.com.br');
+  const [loadingConnections, setLoadingConnections] = useState(false);
 
   const currentModule = useMemo(
     () => (modules || []).find((module: any) => Number(module?.id) === MODULE_ID) || null,
@@ -50,16 +55,69 @@ const CpnjConexoes = () => {
     [connections]
   );
 
-  useEffect(() => {
-    const loadConnections = async () => {
-      const result = await cnpjChatInteligenteService.listConnections();
-      if (result.success && result.data?.data) {
-        setConnections(result.data.data);
-      }
-    };
+  const selectedConnection = useMemo(() => {
+    if (!connections.length) return null;
+    if (!selectedConnectionId) return activeConnection || connections[0];
+    return connections.find((item) => item.id === selectedConnectionId) || activeConnection || connections[0];
+  }, [connections, selectedConnectionId, activeConnection]);
 
-    void loadConnections();
-  }, []);
+  const runtimeConfigUrl = useMemo(() => {
+    if (!selectedConnection?.integration_token) return '';
+    return `${apiBase}/cnpj-chatinteligente/n8n/runtime-config?token=${selectedConnection.integration_token}`;
+  }, [apiBase, selectedConnection?.integration_token]);
+
+  const syncStatusUrl = useMemo(() => {
+    if (!selectedConnection?.integration_token) return '';
+    return `${apiBase}/cnpj-chatinteligente/n8n/sync?token=${selectedConnection.integration_token}`;
+  }, [apiBase, selectedConnection?.integration_token]);
+
+  const qrImageSource = useMemo(() => {
+    const qr = selectedConnection?.qr_code?.trim();
+    if (!qr) return '';
+    if (qr.startsWith('data:image')) return qr;
+    if (qr.startsWith('http://') || qr.startsWith('https://')) return qr;
+    return `data:image/png;base64,${qr}`;
+  }, [selectedConnection?.qr_code]);
+
+  const loadConnections = useCallback(async (silent = false) => {
+    if (!silent) setLoadingConnections(true);
+    const result = await cnpjChatInteligenteService.listConnections();
+    if (result.success && result.data?.data) {
+      setConnections(result.data.data);
+      if (!selectedConnectionId && result.data.data.length > 0) {
+        const preferred = result.data.data.find((item) => item.connection_status === 'conectado') || result.data.data[0];
+        setSelectedConnectionId(preferred.id);
+      }
+    }
+    if (!silent) setLoadingConnections(false);
+  }, [selectedConnectionId]);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      await fetchApiConfig();
+      setApiBase(getApiUrl());
+      await loadConnections();
+    };
+    void bootstrap();
+  }, [loadConnections]);
+
+  useEffect(() => {
+    if (!selectedConnectionId) return;
+    const timer = window.setInterval(() => {
+      void loadConnections(true);
+    }, 7000);
+    return () => window.clearInterval(timer);
+  }, [selectedConnectionId, loadConnections]);
+
+  useEffect(() => {
+    localStorage.setItem('cnpj_keep_connected_browser', keepConnected ? '1' : '0');
+  }, [keepConnected]);
+
+  const handleCopy = async (text: string, label: string) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado`);
+  };
 
   const handleConnect = async () => {
     if (phone.replace(/\D+/g, '').length < 10) {
@@ -79,24 +137,24 @@ const CpnjConexoes = () => {
         return;
       }
 
-      const statusResult = await cnpjChatInteligenteService.updateConnectionStatus({
-        id: createResult.data.id,
-        connection_status: 'conectado',
-      });
+      setSelectedConnectionId(createResult.data.id);
+      await loadConnections();
 
-      if (!statusResult.success) {
-        toast.error(statusResult.error || 'Conexão criada, mas não foi possível ativar o status');
-      }
-
-      const listResult = await cnpjChatInteligenteService.listConnections();
-      if (listResult.success && listResult.data?.data) {
-        setConnections(listResult.data.data);
-      }
-
-      toast.success('Conexão preparada! Agora finalize a integração do WhatsApp.');
+      toast.success('Conexão criada! Escaneie o QR no provedor para ativar.');
     } finally {
       setConnecting(false);
     }
+  };
+
+  const handleRotateToken = async () => {
+    if (!selectedConnection?.id) return;
+    const result = await cnpjChatInteligenteService.rotateConnectionToken({ id: selectedConnection.id });
+    if (!result.success) {
+      toast.error(result.error || 'Falha ao gerar novo token');
+      return;
+    }
+    await loadConnections();
+    toast.success('Novo token de integração gerado');
   };
 
   return (
@@ -131,47 +189,108 @@ const CpnjConexoes = () => {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <Card>
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">WhatsApp</Badge>
-              <Badge variant="outline">Canal principal</Badge>
+              <Badge variant="outline">Conexão ativa</Badge>
             </div>
-            <CardTitle className="text-base sm:text-lg">Dados da conexão</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Escaneie para entrar</CardTitle>
             <CardDescription>
-              Configure os dados iniciais para vincular o WhatsApp ao seu agente de IA.
+              Use a câmera do seu celular para escanear o QR code e vincular esta sessão.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="sessionName">Nome da conexão</Label>
-              <Input
-                id="sessionName"
-                value={sessionName}
-                onChange={(event) => setSessionName(event.target.value)}
-                placeholder="Ex.: WhatsApp Loja Centro"
-              />
+            <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="sessionName">Nome da conexão</Label>
+                  <Input
+                    id="sessionName"
+                    value={sessionName}
+                    onChange={(event) => setSessionName(event.target.value)}
+                    placeholder="Ex.: WhatsApp Loja Centro"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Conectar com número de telefone</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+
+                <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-sm">
+                  <p className="font-medium">1. Abra o WhatsApp no celular</p>
+                  <p className="text-muted-foreground">2. Toque em Dispositivos conectados</p>
+                  <p className="text-muted-foreground">3. Escaneie o QR code novamente para acessar sua conta</p>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={keepConnected}
+                    onChange={(event) => setKeepConnected(event.target.checked)}
+                  />
+                  Continuar conectado neste navegador
+                </label>
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" onClick={() => navigate('/dashboard/cnpj-chatinteligente')}>
+                    Ajustar agente
+                  </Button>
+                  <Button onClick={handleConnect} disabled={connecting}>
+                    <Smartphone className="mr-2 h-4 w-4" />
+                    {connecting ? 'Criando...' : 'Criar conexão'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-md border bg-background">
+                  {qrImageSource ? (
+                    <img src={qrImageSource} alt="QR code do WhatsApp" className="h-full w-full object-contain" loading="lazy" />
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      <QrCode className="mx-auto mb-2 h-7 w-7" />
+                      <p className="text-xs">QR code aparecerá aqui</p>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {selectedConnection?.connection_status === 'conectado'
+                    ? 'Sessão conectada com sucesso.'
+                    : 'Aguardando QR do seu provedor Baileys/n8n.'}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Número do WhatsApp</Label>
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(11) 99999-9999"
-              />
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" onClick={() => navigate('/dashboard/cnpj-chatinteligente')}>
-                Ajustar agente
-              </Button>
-              <Button onClick={handleConnect} disabled={connecting}>
-                <Smartphone className="mr-2 h-4 w-4" />
-                {connecting ? 'Conectando...' : 'Conectar WhatsApp'}
-              </Button>
+              <Label>Conexões cadastradas</Label>
+              <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+                {connections.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma conexão criada ainda.</p>
+                ) : (
+                  connections.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedConnectionId(item.id)}
+                      className={`w-full rounded-md border p-3 text-left transition ${selectedConnection?.id === item.id ? 'bg-muted/40' : 'bg-background'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium truncate">{item.session_name}</p>
+                        <Badge variant={item.connection_status === 'conectado' ? 'default' : 'secondary'}>{item.connection_status}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.whatsapp_number}</p>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -179,7 +298,7 @@ const CpnjConexoes = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Status da integração</CardTitle>
-            <CardDescription>Acompanhe o estado da conexão para ativar o agente.</CardDescription>
+            <CardDescription>Acompanhe QR, pareamento por número e endpoints do n8n.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg border bg-muted/30 p-4">
@@ -192,16 +311,62 @@ const CpnjConexoes = () => {
                   ? 'Seu WhatsApp está vinculado e pronto para receber mensagens com IA.'
                   : 'Preencha os dados e clique em conectar para iniciar o vínculo com seu WhatsApp.'}
               </p>
-              {activeConnection ? (
+              {selectedConnection ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Sessão ativa: <strong>{activeConnection.session_name}</strong> • Número: <strong>{activeConnection.whatsapp_number}</strong>
+                  Sessão selecionada: <strong>{selectedConnection.session_name}</strong> • Número: <strong>{selectedConnection.whatsapp_number}</strong>
                 </p>
+              ) : null}
+              {selectedConnection?.pairing_code ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Código de telefone: <strong>{selectedConnection.pairing_code}</strong>
+                </p>
+              ) : null}
+              {selectedConnection?.connection_error ? (
+                <p className="mt-2 text-xs text-muted-foreground">Erro atual: {selectedConnection.connection_error}</p>
               ) : null}
             </div>
 
-            <Button className="w-full" variant="outline" onClick={() => navigate('/dashboard/cnpj-chatinteligente')}>
-              Ir para configuração do agente
-            </Button>
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Token da integração</p>
+                <Button type="button" variant="outline" size="sm" onClick={handleRotateToken} disabled={!selectedConnection?.id}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  Gerar novo
+                </Button>
+              </div>
+              <Input value={selectedConnection?.integration_token || ''} readOnly placeholder="Crie uma conexão para gerar token" />
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-sm font-medium">Endpoint Runtime Config (n8n → API)</p>
+              <div className="flex items-center gap-2">
+                <Input value={runtimeConfigUrl} readOnly placeholder="Selecione uma conexão" />
+                <Button type="button" variant="outline" size="icon" onClick={() => void handleCopy(runtimeConfigUrl, 'URL runtime')} disabled={!runtimeConfigUrl}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-sm font-medium">Endpoint Sync Status (n8n → API)</p>
+              <div className="flex items-center gap-2">
+                <Input value={syncStatusUrl} readOnly placeholder="Selecione uma conexão" />
+                <Button type="button" variant="outline" size="icon" onClick={() => void handleCopy(syncStatusUrl, 'URL de sync')} disabled={!syncStatusUrl}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button variant="outline" onClick={() => void loadConnections()} disabled={loadingConnections}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Atualizar agora
+              </Button>
+              <Button className="w-full" variant="outline" onClick={() => navigate('/dashboard/cnpj-chatinteligente')}>
+                <SmartphoneNfc className="mr-2 h-4 w-4" />
+                Ir para agente
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
