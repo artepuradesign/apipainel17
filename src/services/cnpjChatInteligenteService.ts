@@ -29,6 +29,9 @@ export interface WhatsAppConnection {
   whatsapp_number: string;
   connection_status: 'pendente' | 'conectado' | 'desconectado';
   qr_code: string | null;
+  integration_token?: string | null;
+  pairing_code?: string | null;
+  connection_error?: string | null;
   last_connected_at: string | null;
   created_at: string;
   updated_at: string;
@@ -94,6 +97,13 @@ export const cnpjChatInteligenteService = {
 
   async updateConnectionStatus(payload: { id: number; connection_status: 'pendente' | 'conectado' | 'desconectado' }) {
     return apiRequest<WhatsAppConnection>('/cnpj-chatinteligente/connections/status', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async rotateConnectionToken(payload: { id: number }) {
+    return apiRequest<WhatsAppConnection>('/cnpj-chatinteligente/connections/token', {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
