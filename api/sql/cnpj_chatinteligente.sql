@@ -37,25 +37,10 @@ CREATE TABLE IF NOT EXISTS cnpj_chatinteligente_connections (
   KEY idx_chat_conn_status (connection_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Ajustes defensivos para bases antigas (sem IF NOT EXISTS em ALTER TABLE)
-SET @db_name := DATABASE();
-
-SELECT COUNT(*) INTO @has_agent_status
-FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = @db_name
-  AND TABLE_NAME = 'cnpj_chatinteligente_agents'
-  AND COLUMN_NAME = 'status';
-SET @sql := IF(@has_agent_status = 0,
-  'ALTER TABLE cnpj_chatinteligente_agents ADD COLUMN status ENUM("ativo","inativo") NOT NULL DEFAULT "ativo" AFTER prompt',
-  'SELECT "Coluna status já existe"');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SELECT COUNT(*) INTO @has_conn_status
-FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = @db_name
-  AND TABLE_NAME = 'cnpj_chatinteligente_connections'
-  AND COLUMN_NAME = 'connection_status';
-SET @sql := IF(@has_conn_status = 0,
-  'ALTER TABLE cnpj_chatinteligente_connections ADD COLUMN connection_status ENUM("pendente","conectado","desconectado") NOT NULL DEFAULT "pendente" AFTER whatsapp_number',
-  'SELECT "Coluna connection_status já existe"');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+-- Compatível com phpMyAdmin: removido bloco PREPARE/EXECUTE.
+-- Se precisar ajustar base antiga, rode manualmente APENAS se a coluna não existir:
+-- ALTER TABLE cnpj_chatinteligente_agents
+--   ADD COLUMN status ENUM('ativo','inativo') NOT NULL DEFAULT 'ativo' AFTER prompt;
+--
+-- ALTER TABLE cnpj_chatinteligente_connections
+--   ADD COLUMN connection_status ENUM('pendente','conectado','desconectado') NOT NULL DEFAULT 'pendente' AFTER whatsapp_number;
