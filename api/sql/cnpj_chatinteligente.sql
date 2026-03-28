@@ -2,7 +2,7 @@
 -- Banco: MySQL / MariaDB
 -- Módulos:
 --   187 -> /dashboard/cnpj-chatinteligente (configuração do agente)
---   188 -> /dashboard/cpnj-conexoes (conexões WhatsApp)
+--   188 -> /dashboard/cnpj-conexoes (conexões WhatsApp)
 
 CREATE TABLE IF NOT EXISTS cnpj_chatinteligente_agents (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
