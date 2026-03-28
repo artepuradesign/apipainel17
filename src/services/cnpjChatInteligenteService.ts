@@ -44,6 +44,14 @@ export interface ApiResponse<T = any> {
   message?: string;
 }
 
+export interface TriggerWahaConnectPayload {
+  webhook_url: string;
+  integration_token: string;
+  ip: string;
+  porta: number;
+  api_key: string;
+}
+
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   try {
     await fetchApiConfig();
@@ -107,5 +115,46 @@ export const cnpjChatInteligenteService = {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
+  },
+
+  async triggerWahaConnect(payload: TriggerWahaConnectPayload): Promise<ApiResponse<{ ok?: boolean }>> {
+    try {
+      const response = await fetch(payload.webhook_url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          integration_token: payload.integration_token,
+          ip: payload.ip,
+          porta: payload.porta,
+          api_key: payload.api_key,
+        }),
+      });
+
+      const text = await response.text();
+      let parsed: any = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: parsed?.message || parsed?.error || `Falha ao acionar webhook n8n (HTTP ${response.status})`,
+          data: parsed,
+        };
+      }
+
+      return {
+        success: true,
+        data: parsed || { ok: true },
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao acionar webhook n8n' };
+    }
   },
 };
