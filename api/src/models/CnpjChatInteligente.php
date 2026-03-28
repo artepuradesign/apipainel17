@@ -78,7 +78,7 @@ class CnpjChatInteligente extends BaseModel {
     }
 
     public function listConnectionsByUserId(int $userId): array {
-        $query = "SELECT id, module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, last_connected_at, created_at, updated_at
+        $query = "SELECT id, module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, integration_token, pairing_code, connection_error, last_connected_at, created_at, updated_at
                   FROM {$this->connectionsTable}
                   WHERE user_id = ?
                   ORDER BY id DESC";
@@ -99,11 +99,13 @@ class CnpjChatInteligente extends BaseModel {
             throw new Exception('Número de WhatsApp inválido (10 a 13 dígitos)');
         }
 
+        $integrationToken = bin2hex(random_bytes(24));
+
         $insert = "INSERT INTO {$this->connectionsTable}
-                  (module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, created_at, updated_at)
-                  VALUES (188, ?, ?, ?, 'pendente', NULL, NOW(), NOW())";
+                  (module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, integration_token, pairing_code, connection_error, created_at, updated_at)
+                  VALUES (188, ?, ?, ?, 'pendente', NULL, ?, NULL, NULL, NOW(), NOW())";
         $stmt = $this->db->prepare($insert);
-        $stmt->execute([$userId, $sessionName, $whatsAppNumber]);
+        $stmt->execute([$userId, $sessionName, $whatsAppNumber, $integrationToken]);
 
         $id = (int)$this->db->lastInsertId();
         return $this->getConnectionByIdForUser($id, $userId) ?? [];
@@ -117,11 +119,13 @@ class CnpjChatInteligente extends BaseModel {
 
         $update = "UPDATE {$this->connectionsTable}
                    SET connection_status = ?,
+                       qr_code = CASE WHEN ? = 'conectado' THEN NULL ELSE qr_code END,
+                       connection_error = CASE WHEN ? = 'conectado' THEN NULL ELSE connection_error END,
                        last_connected_at = CASE WHEN ? = 'conectado' THEN NOW() ELSE last_connected_at END,
                        updated_at = NOW()
                    WHERE id = ? AND user_id = ?";
         $stmt = $this->db->prepare($update);
-        $stmt->execute([$status, $status, $id, $userId]);
+        $stmt->execute([$status, $status, $status, $status, $id, $userId]);
 
         $row = $this->getConnectionByIdForUser($id, $userId);
         if (!$row) {
@@ -132,12 +136,140 @@ class CnpjChatInteligente extends BaseModel {
     }
 
     private function getConnectionByIdForUser(int $id, int $userId): ?array {
-        $query = "SELECT id, module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, last_connected_at, created_at, updated_at
+        $query = "SELECT id, module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, integration_token, pairing_code, connection_error, last_connected_at, created_at, updated_at
                   FROM {$this->connectionsTable}
                   WHERE id = ? AND user_id = ?
                   LIMIT 1";
         $stmt = $this->db->prepare($query);
         $stmt->execute([$id, $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    public function rotateConnectionToken(int $userId, int $id): array {
+        $row = $this->getConnectionByIdForUser($id, $userId);
+        if (!$row) {
+            throw new Exception('Conexão não encontrada');
+        }
+
+        $newToken = bin2hex(random_bytes(24));
+        $query = "UPDATE {$this->connectionsTable}
+                  SET integration_token = ?, updated_at = NOW()
+                  WHERE id = ? AND user_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$newToken, $id, $userId]);
+
+        $updated = $this->getConnectionByIdForUser($id, $userId);
+        if (!$updated) {
+            throw new Exception('Não foi possível atualizar o token da conexão');
+        }
+
+        return $updated;
+    }
+
+    public function updateConnectionFromN8n(string $integrationToken, array $payload): array {
+        $row = $this->getConnectionByToken($integrationToken);
+        if (!$row) {
+            throw new Exception('Conexão inválida para integração n8n');
+        }
+
+        $status = trim((string)($payload['connection_status'] ?? ''));
+        $allowed = ['pendente', 'conectado', 'desconectado'];
+        if ($status === '' || !in_array($status, $allowed, true)) {
+            $status = (string)$row['connection_status'];
+        }
+
+        $qrCode = array_key_exists('qr_code', $payload)
+            ? (string)($payload['qr_code'] ?? '')
+            : (string)($row['qr_code'] ?? '');
+        $pairingCode = array_key_exists('pairing_code', $payload)
+            ? trim((string)($payload['pairing_code'] ?? ''))
+            : (string)($row['pairing_code'] ?? '');
+        $error = array_key_exists('connection_error', $payload)
+            ? trim((string)($payload['connection_error'] ?? ''))
+            : (string)($row['connection_error'] ?? '');
+
+        if ($status === 'conectado') {
+            $qrCode = '';
+            $error = '';
+        }
+
+        $query = "UPDATE {$this->connectionsTable}
+                  SET connection_status = ?,
+                      qr_code = ?,
+                      pairing_code = ?,
+                      connection_error = ?,
+                      last_connected_at = CASE WHEN ? = 'conectado' THEN NOW() ELSE last_connected_at END,
+                      updated_at = NOW()
+                  WHERE id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([
+            $status,
+            $qrCode !== '' ? $qrCode : null,
+            $pairingCode !== '' ? $pairingCode : null,
+            $error !== '' ? $error : null,
+            $status,
+            (int)$row['id'],
+        ]);
+
+        $updated = $this->getConnectionByToken($integrationToken);
+        if (!$updated) {
+            throw new Exception('Falha ao sincronizar conexão');
+        }
+
+        return $updated;
+    }
+
+    public function getRuntimeConfigByToken(string $integrationToken): array {
+        $query = "SELECT
+                    c.id AS connection_id,
+                    c.user_id,
+                    c.session_name,
+                    c.whatsapp_number,
+                    c.connection_status,
+                    c.integration_token,
+                    a.agent_name,
+                    a.prompt,
+                    a.openai_api_key
+                  FROM {$this->connectionsTable} c
+                  INNER JOIN {$this->agentsTable} a ON a.user_id = c.user_id
+                  WHERE c.integration_token = ?
+                  LIMIT 1";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$integrationToken]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            throw new Exception('Configuração não encontrada para o token informado');
+        }
+
+        if (empty($row['openai_api_key'])) {
+            throw new Exception('A conexão existe, mas o usuário não cadastrou API Key da OpenAI');
+        }
+
+        if (empty($row['prompt'])) {
+            throw new Exception('A conexão existe, mas o prompt do agente está vazio');
+        }
+
+        return [
+            'connection_id' => (int)$row['connection_id'],
+            'user_id' => (int)$row['user_id'],
+            'session_name' => (string)$row['session_name'],
+            'whatsapp_number' => (string)$row['whatsapp_number'],
+            'connection_status' => (string)$row['connection_status'],
+            'agent_name' => (string)($row['agent_name'] ?? ''),
+            'prompt' => (string)($row['prompt'] ?? ''),
+            'openai_api_key' => (string)($row['openai_api_key'] ?? ''),
+        ];
+    }
+
+    private function getConnectionByToken(string $integrationToken): ?array {
+        $query = "SELECT id, module_id, user_id, session_name, whatsapp_number, connection_status, qr_code, integration_token, pairing_code, connection_error, last_connected_at, created_at, updated_at
+                  FROM {$this->connectionsTable}
+                  WHERE integration_token = ?
+                  LIMIT 1";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$integrationToken]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
     }
