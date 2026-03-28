@@ -613,6 +613,12 @@ try {
         exit();
     }
 
+    // CNPJ Chat Inteligente - Módulos 187 e 188
+    if (strpos($endpoint, '/cnpj-chatinteligente') === 0) {
+        include __DIR__ . '/src/routes/cnpj_chatinteligente.php';
+        exit();
+    }
+
     // Sistemas Domínio .COM - Módulo 176
     if (strpos($endpoint, '/sistemas-dominio-com') === 0) {
         include __DIR__ . '/src/routes/sistemas_dominio_com.php';
@@ -793,7 +799,8 @@ try {
                 'login-gmail' => '/login-gmail',
                 'login-renner' => '/login-renner',
                 'pdf-rg' => '/pdf-rg',
-                'cnpj-produtos' => '/cnpj-produtos'
+                'cnpj-produtos' => '/cnpj-produtos',
+                'cnpj-chatinteligente' => '/cnpj-chatinteligente'
             ]
         ], 'API Externa operacional');
         exit();
