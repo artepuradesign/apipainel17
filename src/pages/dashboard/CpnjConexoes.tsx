@@ -26,6 +26,10 @@ const CpnjConexoes = () => {
   const [sessionName, setSessionName] = useState('Minha conexão WhatsApp');
   const [phone, setPhone] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [n8nWebhookUrl, setN8nWebhookUrl] = useState('https://n8n.apipainel.com.br/webhook/waha-connect');
+  const [wahaIp, setWahaIp] = useState('187.77.227.205');
+  const [wahaPort, setWahaPort] = useState('3000');
+  const [wahaApiKey, setWahaApiKey] = useState('');
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
   const [keepConnected, setKeepConnected] = useState<boolean>(() => localStorage.getItem('cnpj_keep_connected_browser') !== '0');
@@ -138,6 +142,27 @@ const CpnjConexoes = () => {
       return;
     }
 
+    if (!n8nWebhookUrl.trim().startsWith('http')) {
+      toast.error('Informe a URL do webhook do n8n');
+      return;
+    }
+
+    if (!wahaIp.trim()) {
+      toast.error('Informe o IP do WAHA');
+      return;
+    }
+
+    const parsedPort = Number(wahaPort);
+    if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+      toast.error('Informe uma porta WAHA válida (1-65535)');
+      return;
+    }
+
+    if (!wahaApiKey.trim()) {
+      toast.error('Informe o token da API do WAHA');
+      return;
+    }
+
     setConnecting(true);
     try {
       const createResult = await cnpjChatInteligenteService.createConnection({
@@ -151,9 +176,30 @@ const CpnjConexoes = () => {
       }
 
       setSelectedConnectionId(createResult.data.id);
+
+      const integrationToken = createResult.data.integration_token;
+      if (!integrationToken) {
+        toast.error('Conexão criada, mas sem integration_token para disparar o n8n');
+        await loadConnections();
+        return;
+      }
+
+      const n8nResult = await cnpjChatInteligenteService.triggerWahaConnect({
+        webhook_url: n8nWebhookUrl.trim(),
+        integration_token: integrationToken,
+        ip: wahaIp.trim(),
+        porta: parsedPort,
+        api_key: wahaApiKey.trim(),
+      });
+
       await loadConnections();
 
-      toast.success('Conexão criada! Escaneie o QR no provedor para ativar.');
+      if (!n8nResult.success) {
+        toast.error(n8nResult.error || 'Conexão criada, mas falhou ao acionar o webhook do n8n');
+        return;
+      }
+
+      toast.success('Conexão criada! n8n acionado, aguardando sincronização do QR.');
     } finally {
       setConnecting(false);
     }
@@ -243,6 +289,48 @@ const CpnjConexoes = () => {
                   <p className="text-muted-foreground">3. Escaneie o QR code novamente para acessar sua conta</p>
                 </div>
 
+                <div className="space-y-3 rounded-md border bg-muted/20 p-3 text-sm">
+                  <p className="font-medium">Configuração n8n + WAHA</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="n8nWebhookUrl">Webhook n8n</Label>
+                    <Input
+                      id="n8nWebhookUrl"
+                      value={n8nWebhookUrl}
+                      onChange={(event) => setN8nWebhookUrl(event.target.value)}
+                      placeholder="https://n8n.apipainel.com.br/webhook/waha-connect"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="wahaIp">IP WAHA</Label>
+                      <Input
+                        id="wahaIp"
+                        value={wahaIp}
+                        onChange={(event) => setWahaIp(event.target.value)}
+                        placeholder="187.77.227.205"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="wahaPort">Porta WAHA</Label>
+                      <Input
+                        id="wahaPort"
+                        value={wahaPort}
+                        onChange={(event) => setWahaPort(event.target.value)}
+                        placeholder="3000"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="wahaApiKey">Token API WAHA</Label>
+                    <Input
+                      id="wahaApiKey"
+                      value={wahaApiKey}
+                      onChange={(event) => setWahaApiKey(event.target.value)}
+                      placeholder="token_user"
+                    />
+                  </div>
+                </div>
+
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -258,7 +346,7 @@ const CpnjConexoes = () => {
                   </Button>
                   <Button onClick={handleConnect} disabled={connecting}>
                     <Smartphone className="mr-2 h-4 w-4" />
-                    {connecting ? 'Criando...' : 'Criar conexão'}
+                    {connecting ? 'Conectando...' : 'Conectar WhatsApp'}
                   </Button>
                 </div>
               </div>
