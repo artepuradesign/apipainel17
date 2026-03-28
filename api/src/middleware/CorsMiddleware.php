@@ -23,7 +23,7 @@ class CorsMiddleware {
         }
         
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-API-Key, X-CSRF-Token');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-API-Key, X-CSRF-Token, X-Integration-Token');
         header('Access-Control-Allow-Credentials: false');
         header('Access-Control-Max-Age: 86400');
         header('Content-Type: application/json; charset=UTF-8');

@@ -140,4 +140,87 @@ class CnpjChatInteligenteController {
             Response::error($e->getMessage(), 400);
         }
     }
+
+    public function rotateConnectionToken() {
+        try {
+            $userId = AuthMiddleware::getCurrentUserId();
+            if (!$userId) {
+                Response::error('Usuário não autenticado', 401);
+                return;
+            }
+
+            $raw = file_get_contents('php://input');
+            $input = json_decode($raw, true);
+            if (!$input || !is_array($input)) {
+                Response::error('Dados inválidos', 400);
+                return;
+            }
+
+            $id = (int)($input['id'] ?? 0);
+            if ($id <= 0) {
+                Response::error('ID da conexão é obrigatório', 400);
+                return;
+            }
+
+            $updated = $this->model->rotateConnectionToken((int)$userId, $id);
+            Response::success($updated, 'Token da integração atualizado com sucesso');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    public function getRuntimeConfigForN8n() {
+        try {
+            $token = $this->getIntegrationTokenFromRequest();
+            if ($token === '') {
+                Response::error('Token de integração não informado', 401);
+                return;
+            }
+
+            $config = $this->model->getRuntimeConfigByToken($token);
+            Response::success($config, 'Configuração runtime carregada com sucesso');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    public function syncConnectionFromN8n() {
+        try {
+            $token = $this->getIntegrationTokenFromRequest();
+            if ($token === '') {
+                Response::error('Token de integração não informado', 401);
+                return;
+            }
+
+            $raw = file_get_contents('php://input');
+            $input = json_decode($raw, true);
+            if (!$input || !is_array($input)) {
+                Response::error('Payload inválido para sincronização', 400);
+                return;
+            }
+
+            $updated = $this->model->updateConnectionFromN8n($token, $input);
+            Response::success($updated, 'Conexão sincronizada com sucesso');
+        } catch (Exception $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    private function getIntegrationTokenFromRequest(): string {
+        $headerToken = $_SERVER['HTTP_X_INTEGRATION_TOKEN'] ?? '';
+        $queryToken = $_GET['token'] ?? '';
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+
+        $bearerToken = '';
+        if (is_string($authHeader) && preg_match('/Bearer\s+(.+)/i', $authHeader, $matches)) {
+            $bearerToken = trim((string)$matches[1]);
+        }
+
+        $token = trim((string)($headerToken ?: ($queryToken ?: $bearerToken)));
+        if ($token === '') {
+            return '';
+        }
+
+        return preg_replace('/[^a-zA-Z0-9]/', '', $token);
+    }
 }

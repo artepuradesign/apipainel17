@@ -17,15 +17,26 @@ if (!isset($db)) {
     exit;
 }
 
-$authMiddleware = new AuthMiddleware($db);
-if (!$authMiddleware->handle()) {
-    exit;
-}
-
 $controller = new CnpjChatInteligenteController($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $path = preg_replace('#^/api(?:\.php)?#', '', $path);
+
+// Endpoints para integração n8n (autenticação via token de integração)
+if ($method === 'GET' && preg_match('#/cnpj-chatinteligente/n8n/runtime-config/?$#', $path)) {
+    $controller->getRuntimeConfigForN8n();
+    exit;
+}
+
+if ($method === 'POST' && preg_match('#/cnpj-chatinteligente/n8n/sync/?$#', $path)) {
+    $controller->syncConnectionFromN8n();
+    exit;
+}
+
+$authMiddleware = new AuthMiddleware($db);
+if (!$authMiddleware->handle()) {
+    exit;
+}
 
 switch ($method) {
     case 'GET':
@@ -51,6 +62,8 @@ switch ($method) {
             $controller->saveAgentConfig();
         } elseif (preg_match('#/cnpj-chatinteligente/connections/status/?$#', $path)) {
             $controller->updateConnectionStatus();
+        } elseif (preg_match('#/cnpj-chatinteligente/connections/token/?$#', $path)) {
+            $controller->rotateConnectionToken();
         } else {
             Response::notFound('Endpoint não encontrado');
         }
