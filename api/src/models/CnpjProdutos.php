@@ -520,9 +520,9 @@ class CnpjProdutos extends BaseModel {
         }
 
         foreach (['descricao_produto', 'descricao'] as $column) {
-            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
-            $stmt->execute([$column]);
-            if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stmt = $this->db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+            $stmt->execute([$this->table, $column]);
+            if ((int)$stmt->fetchColumn() > 0) {
                 $this->descriptionColumn = $column;
                 $this->descriptionColumnResolved = true;
                 return $this->descriptionColumn;
@@ -543,9 +543,9 @@ class CnpjProdutos extends BaseModel {
             return $this->userProfilesColumns[$columnName];
         }
 
-        $stmt = $this->db->prepare('SHOW COLUMNS FROM user_profiles LIKE ?');
-        $stmt->execute([$columnName]);
-        $exists = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $stmt->execute(['user_profiles', $columnName]);
+        $exists = ((int)$stmt->fetchColumn()) > 0;
         $this->userProfilesColumns[$columnName] = $exists;
 
         return $exists;
