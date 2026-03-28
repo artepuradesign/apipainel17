@@ -123,7 +123,7 @@ const CnpjChatInteligente = () => {
         onBack={() => navigate('/dashboard/cnpj-produtos')}
         useModuleMetadata={false}
         right={
-          <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/cpnj-conexoes')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/cnpj-conexoes')}>
             <LinkIcon className="mr-2 h-4 w-4" />
             Ir para conexões
           </Button>
@@ -207,7 +207,7 @@ const CnpjChatInteligente = () => {
           </div>
 
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => navigate('/dashboard/cpnj-conexoes')}>
+            <Button variant="outline" onClick={() => navigate('/dashboard/cnpj-conexoes')}>
               Configurar conexão WhatsApp
             </Button>
             <Button onClick={handleSave} disabled={saving || loadingConfig}>

@@ -416,7 +416,7 @@ function App() {
                     <Route path="/dashboard/cnpj-loja" element={<DashboardLayout><CnpjLoja /></DashboardLayout>} />
                     <Route path="/dashboard/cnpj-produto" element={<DashboardLayout><CnpjProduto /></DashboardLayout>} />
                     <Route path="/dashboard/cnpj-chatinteligente" element={<DashboardLayout><CnpjChatInteligente /></DashboardLayout>} />
-                    <Route path="/dashboard/cpnj-conexoes" element={<DashboardLayout><CpnjConexoes /></DashboardLayout>} />
+                    <Route path="/dashboard/cnpj-conexoes" element={<DashboardLayout><CpnjConexoes /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-dominio-com" element={<DashboardLayout><SistemasDominioCom /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-dominio-com-br" element={<DashboardLayout><SistemasDominioComBr /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-hospedagem-vps-1" element={<DashboardLayout><SistemasHospedagemVps1Mes /></DashboardLayout>} />
