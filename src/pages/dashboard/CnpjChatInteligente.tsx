@@ -50,6 +50,7 @@ const CnpjChatInteligente = () => {
         title="CNPJ Chat Inteligente"
         subtitle="Configure seu agente de IA para atendimento no WhatsApp"
         icon={<Bot className="h-4 w-4 sm:h-5 sm:w-5" />}
+        onBack={() => navigate('/dashboard/cnpj-produtos')}
         right={
           <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/cpnj-conexoes')}>
             <LinkIcon className="mr-2 h-4 w-4" />
