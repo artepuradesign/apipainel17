@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QrCode, Smartphone, Link as LinkIcon, Bot, CheckCircle2, RefreshCw, Copy, ShieldCheck, SmartphoneNfc } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import ReactQRCode from 'react-qr-code';
 import { toast } from 'sonner';
 import SimpleTitleBar from '@/components/dashboard/SimpleTitleBar';
 import { Badge } from '@/components/ui/badge';
@@ -71,12 +72,24 @@ const CpnjConexoes = () => {
     return `${apiBase}/cnpj-chatinteligente/n8n/sync?token=${selectedConnection.integration_token}`;
   }, [apiBase, selectedConnection?.integration_token]);
 
-  const qrImageSource = useMemo(() => {
-    const qr = selectedConnection?.qr_code?.trim();
-    if (!qr) return '';
-    if (qr.startsWith('data:image')) return qr;
-    if (qr.startsWith('http://') || qr.startsWith('https://')) return qr;
-    return `data:image/png;base64,${qr}`;
+  const qrPayload = useMemo(() => {
+    const qr = selectedConnection?.qr_code?.trim() || '';
+    if (!qr) return { mode: 'empty' as const, value: '' };
+
+    if (qr.startsWith('data:image')) {
+      return { mode: 'image' as const, value: qr };
+    }
+
+    if (qr.startsWith('http://') || qr.startsWith('https://')) {
+      return { mode: 'image' as const, value: qr };
+    }
+
+    const looksLikeImageBase64 = /^[A-Za-z0-9+/=\n\r]+$/.test(qr) && qr.length > 120;
+    if (looksLikeImageBase64) {
+      return { mode: 'image' as const, value: `data:image/png;base64,${qr}` };
+    }
+
+    return { mode: 'raw' as const, value: qr };
   }, [selectedConnection?.qr_code]);
 
   const loadConnections = useCallback(async (silent = false) => {
@@ -252,8 +265,12 @@ const CpnjConexoes = () => {
 
               <div className="rounded-lg border bg-muted/20 p-3">
                 <div className="mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-md border bg-background">
-                  {qrImageSource ? (
-                    <img src={qrImageSource} alt="QR code do WhatsApp" className="h-full w-full object-contain" loading="lazy" />
+                  {qrPayload.mode === 'image' ? (
+                    <img src={qrPayload.value} alt="QR code do WhatsApp" className="h-full w-full object-contain" loading="lazy" />
+                  ) : qrPayload.mode === 'raw' ? (
+                    <div className="rounded-md bg-white p-2">
+                      <ReactQRCode value={qrPayload.value} size={170} />
+                    </div>
                   ) : (
                     <div className="text-center text-muted-foreground">
                       <QrCode className="mx-auto mb-2 h-7 w-7" />
