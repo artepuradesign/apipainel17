@@ -184,6 +184,10 @@ import CnpjLoja from '@/pages/dashboard/CnpjLoja';
 import CnpjProduto from '@/pages/dashboard/CnpjProduto';
 import CnpjChatInteligente from '@/pages/dashboard/CnpjChatInteligente';
 import CpnjConexoes from '@/pages/dashboard/CpnjConexoes';
+import FaceIdFacial from '@/pages/dashboard/FaceIdFacial';
+import FaceIdVerifica from '@/pages/dashboard/FaceIdVerifica';
+import FaceIdSimiliridade from '@/pages/dashboard/FaceIdSimiliridade';
+import FaceIdIdadeg from '@/pages/dashboard/FaceIdIdadeg';
 import SistemasDominioCom from '@/pages/dashboard/SistemasDominioCom';
 import SistemasDominioComBr from '@/pages/dashboard/SistemasDominioComBr';
 import SistemasHospedagemVps1Mes from '@/pages/dashboard/SistemasHospedagemVps1Mes';
@@ -417,6 +421,10 @@ function App() {
                     <Route path="/dashboard/cnpj-produto" element={<DashboardLayout><CnpjProduto /></DashboardLayout>} />
                     <Route path="/dashboard/cnpj-chatinteligente" element={<DashboardLayout><CnpjChatInteligente /></DashboardLayout>} />
                     <Route path="/dashboard/cnpj-conexoes" element={<DashboardLayout><CpnjConexoes /></DashboardLayout>} />
+                    <Route path="/dashboard/faceid-facial" element={<DashboardLayout><FaceIdFacial /></DashboardLayout>} />
+                    <Route path="/dashboard/faceid-verifica" element={<DashboardLayout><FaceIdVerifica /></DashboardLayout>} />
+                    <Route path="/dashboard/faceid-similiridade" element={<DashboardLayout><FaceIdSimiliridade /></DashboardLayout>} />
+                    <Route path="/dashboard/faceid-idadeg" element={<DashboardLayout><FaceIdIdadeg /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-dominio-com" element={<DashboardLayout><SistemasDominioCom /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-dominio-com-br" element={<DashboardLayout><SistemasDominioComBr /></DashboardLayout>} />
                     <Route path="/dashboard/sistemas-hospedagem-vps-1" element={<DashboardLayout><SistemasHospedagemVps1Mes /></DashboardLayout>} />
